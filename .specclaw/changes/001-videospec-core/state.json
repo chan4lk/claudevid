@@ -1,0 +1,8 @@
+{
+  "change": "001-videospec-core",
+  "phase": "build",
+  "branch": "specclaw/001-videospec-core",
+  "phases": {
+    "build": {"status":"in-progress","at":"2026-09-06T18:53:16Z"}
+  }
+}
