@@ -1,12 +1,12 @@
 # 🦞 SpecClaw Dashboard
 
 **Project:** claudevid
-**Last Updated:** 2026-09-06 18:52 UTC
+**Last Updated:** 2026-09-06 19:19 UTC
 
 ## Active Changes
 
 
-- 📝 **001-videospec-core** — tasks done | 0/13 tasks (0%) | 0 failed
+- 🔍 **001-videospec-core** — verify PASS | 13/13 tasks (100%) | 0 failed
 
 ## Pending Proposals
 
