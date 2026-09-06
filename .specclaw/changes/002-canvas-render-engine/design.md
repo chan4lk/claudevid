@@ -18,7 +18,7 @@ renderFrame(timeline, frame, target, opts)
   │     copy previousOutput → target; done
   ├─ ctx.save(); ctx.scale(opts.scale ?? 1, ...); ctx.restore-at-end            [FR12]
   ├─ paint background (spec/scene, always opaque)
-  ├─ for each active layer (recursing into groups):                            [FR9]
+  ├─ for each active layer (already flat — core pre-flattens groups, FR9)
   │     cacheKey = contentHash(layer)                                          [FR4]
   │     if not cached: rasterize once to an offscreen canvas, store in cache
   │     ctx.drawImage(cached, x, y) + globalAlpha/transform
