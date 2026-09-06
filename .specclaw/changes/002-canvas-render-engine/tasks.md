@@ -16,7 +16,7 @@ CI-gated perf test.
 
 ### Wave 1 — Package scaffold + font assets
 
-- [ ] `T1` — `packages/renderer-canvas` package scaffold
+- [~] `T1` — `packages/renderer-canvas` package scaffold
   - Files: `packages/renderer-canvas/package.json`, `packages/renderer-canvas/tsup.config.ts`, `packages/renderer-canvas/vitest.config.ts`, `packages/renderer-canvas/tsconfig.json`
   - Estimate: small
   - Kind: config
@@ -24,14 +24,15 @@ CI-gated perf test.
   - Notes: deps `@napi-rs/canvas` (confirmed installable in this environment via spike),
     `@claudevid/core` as a workspace dependency; devDeps mirror `packages/core`.
 
-- [ ] `T2` — Bundle Inter + JetBrains Mono fonts with license files
-  - Files: `packages/renderer-canvas/assets/fonts/Inter-Regular.ttf`, `packages/renderer-canvas/assets/fonts/Inter-Bold.ttf`, `packages/renderer-canvas/assets/fonts/JetBrainsMono-Regular.ttf`, `packages/renderer-canvas/assets/fonts/LICENSE-OFL.txt`
+- [ ] `T2` — Add `@fontsource/inter` and `@fontsource/jetbrains-mono` as font sources
+  - Files: `packages/renderer-canvas/package.json`
   - Estimate: small
   - Kind: config
-  - Depends: none
-  - Notes: SIL Open Font License — vendor the actual license text in the same commit as the
-    font files, not as a follow-up. Source fonts from their official OFL-licensed release
-    artifacts (Google Fonts' Inter release, JetBrains' official JetBrains Mono release).
+  - Depends: T1
+  - Notes: confirmed empirically that `@napi-rs/canvas`'s `GlobalFonts.registerFromPath` loads
+    `.woff2` directly (both packages ship `.woff2`, no `.ttf`) — no binary font files are
+    vendored in this repo; `@fontsource/*` already bundles the SIL OFL license per package.
+    Regular + bold weights of Inter, regular weight of JetBrains Mono is enough for v1.
 
 ### Wave 2 — Independent low-level pieces (parallel)
 

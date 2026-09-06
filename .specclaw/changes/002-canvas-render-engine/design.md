@@ -47,8 +47,6 @@ packages/renderer-canvas/
     draw-image.test.ts        # fit modes, decode cache
     render.test.ts              # integration: AC1, AC3, AC5, AC6, AC9 (full Renderer)
     perf.test.ts                  # AC7 — ms/frame p95 ceiling, CI-gated
-  assets/
-    fonts/Inter-*.ttf, JetBrainsMono-*.ttf   # bundled, licensed (SIL OFL — verify before commit)
   package.json
   tsup.config.ts
   vitest.config.ts
@@ -171,13 +169,12 @@ limitation noted in spec.md.
 | `packages/renderer-canvas/tsconfig.json` | create | extends root base |
 | `packages/renderer-canvas/src/frame-buffer.ts` | create | `FrameBuffer`, pool, raw extraction |
 | `packages/renderer-canvas/src/raster-cache.ts` | create | content-hash LRU cache |
-| `packages/renderer-canvas/src/fonts.ts` | create | bundled font registration |
+| `packages/renderer-canvas/src/fonts.ts` | create | font registration from `@fontsource/*` |
 | `packages/renderer-canvas/src/text.ts` | create | measure/wrap/position/raster |
 | `packages/renderer-canvas/src/draw-shapes.ts` | create | rect/border/gradient painters |
 | `packages/renderer-canvas/src/draw-image.ts` | create | decode cache, fit modes |
 | `packages/renderer-canvas/src/stats.ts` | create | `RenderStats` accumulator |
 | `packages/renderer-canvas/src/index.ts` | create | `Renderer`, `renderFrame`, hold-frame reuse, group recursion |
-| `packages/renderer-canvas/assets/fonts/*` | create | bundled Inter + JetBrains Mono (OFL-licensed) |
 | `packages/renderer-canvas/test/*.test.ts` | create | 7 test files per Architecture |
 
 ## Data Model Changes
@@ -239,10 +236,12 @@ Public exports from `@claudevid/renderer-canvas`:
   test from day one, not a bolt-on; the raster-cache design (Key Decision 5) and hold-frame
   reuse (Key Decision 3) are both built into the first version rather than layered on after a
   slow v1 ships.
-- **Risk: font licensing.** Bundling Inter + JetBrains Mono ships their font files in this
-  repo. *Mitigation:* both are SIL Open Font License — permissive and bundling-friendly — but
-  the actual license text must be vendored alongside the font files in the same commit that
-  adds them (a task-level checklist item, not a design-time assumption).
+- **Risk: font licensing / binary-asset drift.** *Mitigation:* fonts ship as the `@fontsource/
+  inter` and `@fontsource/jetbrains-mono` npm packages (both re-package the same SIL Open Font
+  License families as versioned, license-bundled `.woff2` files) rather than hand-vendored
+  binary files in this repo — confirmed empirically that `GlobalFonts.registerFromPath` loads
+  `.woff2` directly, so no ttf conversion step is needed. This avoids committing binary font
+  assets to git entirely and gets license compliance for free from the upstream package.
 - **Risk: perf test flakiness in CI** (shared/throttled CI runners can blow a ms/frame budget
   for reasons unrelated to a real regression). *Mitigation:* AC7 measures p95 over ≥10 frames
   (not a single sample) and the ceiling is set with headroom against the 20ms upper bound of
