@@ -36,7 +36,7 @@ CI-gated perf test.
 
 ### Wave 2 — Independent low-level pieces (parallel)
 
-- [ ] `T3` — `frame-buffer.ts`: FrameBuffer, pool, raw extraction
+- [x] `T3` — `frame-buffer.ts`: FrameBuffer, pool, raw extraction
   - Files: `packages/renderer-canvas/src/frame-buffer.ts`
   - Estimate: small
   - Kind: impl
@@ -46,7 +46,7 @@ CI-gated perf test.
     to the pool's `size` param — no dynamic growth in v1 (YAGNI, change 005 controls pool size
     to match its worker count).
 
-- [ ] `T4` — `raster-cache.ts`: content-hash LRU cache
+- [x] `T4` — `raster-cache.ts`: content-hash LRU cache
   - Files: `packages/renderer-canvas/src/raster-cache.ts`
   - Estimate: medium
   - Kind: impl
@@ -56,7 +56,7 @@ CI-gated perf test.
     hit (`Map` iteration order = recency) — no separate doubly-linked-list structure needed at
     this scale.
 
-- [ ] `T5` — `fonts.ts`: bundled font registration + fallback chain
+- [x] `T5` — `fonts.ts`: bundled font registration + fallback chain
   - Files: `packages/renderer-canvas/src/fonts.ts`
   - Estimate: small
   - Kind: impl
@@ -66,7 +66,7 @@ CI-gated perf test.
     or a module-level boolean flag); exports the documented fallback chain string
     (`"Inter, sans-serif"` / `"JetBrains Mono, monospace"`) for `text.ts` to use as defaults.
 
-- [ ] `T6` — `stats.ts`: RenderStats accumulator
+- [x] `T6` — `stats.ts`: RenderStats accumulator
   - Files: `packages/renderer-canvas/src/stats.ts`
   - Estimate: small
   - Kind: impl
@@ -79,7 +79,7 @@ CI-gated perf test.
 
 ### Wave 3 — Painters (parallel, all depend on the raster cache)
 
-- [ ] `T7` — `text.ts`: measure/wrap/position/raster + layout cache
+- [x] `T7` — `text.ts`: measure/wrap/position/raster + layout cache
   - Files: `packages/renderer-canvas/src/text.ts`
   - Estimate: large
   - Kind: impl
@@ -90,7 +90,7 @@ CI-gated perf test.
     array + total dimensions) and the rasterized bitmap share one cache entry keyed together
     (FR4/FR5) — measuring is not repeated on a cache hit.
 
-- [ ] `T8` — `draw-shapes.ts`: rect/rounded-rect/border/gradients
+- [x] `T8` — `draw-shapes.ts`: rect/rounded-rect/border/gradients
   - Files: `packages/renderer-canvas/src/draw-shapes.ts`
   - Estimate: medium
   - Kind: impl
@@ -101,7 +101,7 @@ CI-gated perf test.
     (the gradient object itself is deterministic from its inputs, so it's part of the content
     hash, not re-created per cache hit).
 
-- [ ] `T9` — `draw-image.ts`: decode cache + fit modes
+- [x] `T9` — `draw-image.ts`: decode cache + fit modes
   - Files: `packages/renderer-canvas/src/draw-image.ts`
   - Estimate: medium
   - Kind: impl
@@ -113,7 +113,7 @@ CI-gated perf test.
 
 ### Wave 4 — Orchestration + full test suite
 
-- [ ] `T10` — `index.ts`: Renderer, renderFrame, hold-frame reuse, group recursion, scaling
+- [x] `T10` — `index.ts`: Renderer, renderFrame, hold-frame reuse, group recursion, scaling
   - Files: `packages/renderer-canvas/src/index.ts`
   - Estimate: large
   - Kind: impl
@@ -124,7 +124,7 @@ CI-gated perf test.
     (FR3), then `stats.record*`. This is the task with the most acceptance criteria riding on
     it (AC1, AC3, AC5, AC6, AC9).
 
-- [ ] `T11` — Unit tests: frame-buffer, raster-cache, text, draw-shapes, draw-image
+- [x] `T11` — Unit tests: frame-buffer, raster-cache, text, draw-shapes, draw-image
   - Files: `packages/renderer-canvas/test/frame-buffer.test.ts`, `packages/renderer-canvas/test/raster-cache.test.ts`, `packages/renderer-canvas/test/text.test.ts`, `packages/renderer-canvas/test/draw-shapes.test.ts`, `packages/renderer-canvas/test/draw-image.test.ts`
   - Estimate: large
   - Kind: test
@@ -132,7 +132,7 @@ CI-gated perf test.
   - Notes: covers AC2 (byte order — the committed regression test for the empirical spike),
     AC4 (cache hit is cheaper / doesn't re-measure), AC8 (word-wrap line count).
 
-- [ ] `T12` — Integration + perf tests: render.test.ts, perf.test.ts
+- [x] `T12` — Integration + perf tests: render.test.ts, perf.test.ts
   - Files: `packages/renderer-canvas/test/render.test.ts`, `packages/renderer-canvas/test/perf.test.ts`
   - Estimate: medium
   - Kind: test
