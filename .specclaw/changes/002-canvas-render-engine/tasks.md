@@ -16,7 +16,7 @@ CI-gated perf test.
 
 ### Wave 1 — Package scaffold + font assets
 
-- [~] `T1` — `packages/renderer-canvas` package scaffold
+- [x] `T1` — `packages/renderer-canvas` package scaffold
   - Files: `packages/renderer-canvas/package.json`, `packages/renderer-canvas/tsup.config.ts`, `packages/renderer-canvas/vitest.config.ts`, `packages/renderer-canvas/tsconfig.json`
   - Estimate: small
   - Kind: config
@@ -24,7 +24,7 @@ CI-gated perf test.
   - Notes: deps `@napi-rs/canvas` (confirmed installable in this environment via spike),
     `@claudevid/core` as a workspace dependency; devDeps mirror `packages/core`.
 
-- [ ] `T2` — Add `@fontsource/inter` and `@fontsource/jetbrains-mono` as font sources
+- [x] `T2` — Add `@fontsource/inter` and `@fontsource/jetbrains-mono` as font sources
   - Files: `packages/renderer-canvas/package.json`
   - Estimate: small
   - Kind: config

@@ -1,10 +1,11 @@
 {
   "change": "002-canvas-render-engine",
-  "phase": "tasks",
-  "branch": "",
+  "phase": "build",
+  "branch": "specclaw/002-canvas-render-engine",
   "phases": {
     "spec": {"status":"done","at":"2026-09-06T19:26:01Z"},
     "design": {"status":"done","at":"2026-09-06T19:27:05Z"},
-    "tasks": {"status":"done","at":"2026-09-06T19:27:49Z"}
+    "tasks": {"status":"done","at":"2026-09-06T19:27:49Z"},
+    "build": {"status":"in-progress","at":"2026-09-06T19:30:03Z"}
   }
 }
