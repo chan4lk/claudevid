@@ -97,6 +97,16 @@ See `.specclaw/changes/003-motion-system/party-report.md`.
 - [ ] **Seed the stagger.** `from: "random"` unseeded is not pure — it breaks golden tests and
       reshuffles at chunk boundaries under 005's parallel render. Derive the permutation from
       the group's `layerKey`s, or require a `seed`.
+- [ ] **Decide what a `group`'s own `x`/`y` means.** Verified while building 002: core's
+      `flattenLayers` (001) resolves every child's coordinates against the *spec's* absolute
+      width/height and never applies the parent group's resolved position as an offset — a
+      group's `x`/`y` is currently inert for its children. Fine for 002 (no consumer needs
+      group-relative positioning yet), but 003's stagger/shared-element work implies children
+      *do* relate to their group. Decide: translation offset (needs a sane default — `0,0`,
+      not `"center"`, since translation and position aren't the same concept), a group
+      bounding box children resolve percentages against, or leave groups purely
+      organizational (no positioning role at all, just a stagger/transition grouping
+      mechanism) and say so explicitly in 003's spec.
 - [ ] **Bind diagnostics to an outcome.** Decide whether a cost/clamp diagnostic blocks or is
       advisory, which component owns it (`compileTimeline` vs render start — that choice decides
       whether a CI-failing diagnostic is even reachable), and state the "long window" threshold
