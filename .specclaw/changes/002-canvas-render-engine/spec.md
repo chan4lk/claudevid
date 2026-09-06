@@ -48,9 +48,13 @@ this environment (documented in design.md, not assumed):
   `GlobalFonts.registerFromPath` at renderer construction, with a documented fallback chain.
   System-font resolution is never relied on for the bundled families, so output is
   reproducible across machines.
-- **FR7 — Shape painters.** `draw-shapes.ts`: rect (incl. rounded corners via one radius or
-  per-corner radii), border (color + width), linear and radial gradients. All go through the
-  raster-cache path in FR4 — none are painted by re-running gradient math every frame.
+- **FR7 — Shape painters.** `draw-shapes.ts`: rect (incl. rounded corners via a single radius),
+  solid fill, border (color + width). Goes through the raster-cache path in FR4. **Gradients
+  are not in v1**: core's `RectLayer.fill` (change 001) is a plain `z.string().optional()` with
+  no structured `{type, stops}` shape, so there is nothing for a gradient painter to consume
+  without inventing an ad-hoc string mini-language — deferred to a real schema change if a
+  future proposal needs it, not solved here with a guessed encoding. Likewise, "arrows/lines"
+  from the original proposal text are dropped: core's `Layer` union has no `line`/`arrow` type.
 - **FR8 — Image painter.** `draw-image.ts`: decode once (keyed by `src`), cache the decoded
   bitmap, then paint per fit mode (`cover`/`contain`/`fill`) against the layer's resolved box.
 - **FR9 — Group composition.** `group` layers (from core's `Layer` union) paint their children

@@ -7,7 +7,7 @@
 
 One long-lived `Renderer` per rendering context (per worker in change 005), owning one
 working canvas and one raster cache (a `Map<string, OffscreenBitmap>`). `renderFrame` is
-called once per output frame; everything expensive (measurement, layout, gradient math,
+called once per output frame; everything expensive (measurement, layout,
 image decode) happens at most once per unique content, guarded by content-hash cache keys.
 
 ```
@@ -35,7 +35,7 @@ packages/renderer-canvas/
     frame-buffer.ts   # FrameBuffer type, createFrameBuffer, createFrameBufferPool
     raster-cache.ts   # RasterCache: get-or-render, content hashing, LRU, byte ceiling
     text.ts           # measure/wrap/position, layout cache, glyph raster
-    draw-shapes.ts    # rect/rounded-rect/border/gradients
+    draw-shapes.ts    # rect/rounded-rect/border (no gradients — see spec.md FR7)
     draw-image.ts     # decode cache, fit modes
     fonts.ts          # bundled font registration + fallback chain
     stats.ts          # RenderStats accumulator
@@ -43,7 +43,7 @@ packages/renderer-canvas/
     frame-buffer.test.ts   # byte order (AC2), FrameBuffer pool behavior
     raster-cache.test.ts   # cache hit/miss, LRU eviction, key collisions
     text.test.ts            # wrap correctness (AC8), layout cache
-    draw-shapes.test.ts      # rect/gradient painters
+    draw-shapes.test.ts      # rect/border painters
     draw-image.test.ts        # fit modes, decode cache
     render.test.ts              # integration: AC1, AC3, AC5, AC6, AC9 (full Renderer)
     perf.test.ts                  # AC7 — ms/frame p95 ceiling, CI-gated
@@ -171,7 +171,7 @@ limitation noted in spec.md.
 | `packages/renderer-canvas/src/raster-cache.ts` | create | content-hash LRU cache |
 | `packages/renderer-canvas/src/fonts.ts` | create | font registration from `@fontsource/*` |
 | `packages/renderer-canvas/src/text.ts` | create | measure/wrap/position/raster |
-| `packages/renderer-canvas/src/draw-shapes.ts` | create | rect/border/gradient painters |
+| `packages/renderer-canvas/src/draw-shapes.ts` | create | rect/border painters (no gradients — FR7) |
 | `packages/renderer-canvas/src/draw-image.ts` | create | decode cache, fit modes |
 | `packages/renderer-canvas/src/stats.ts` | create | `RenderStats` accumulator |
 | `packages/renderer-canvas/src/index.ts` | create | `Renderer`, `renderFrame`, hold-frame reuse, group recursion |
