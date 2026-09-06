@@ -2,7 +2,7 @@ import { createCanvas } from "@napi-rs/canvas";
 import type { TextLayer } from "@claudevid/core";
 import { describe, expect, it } from "vitest";
 import { createRasterCache } from "../src/raster-cache.js";
-import { measureAndWrap, paintTextLayer } from "../src/text.js";
+import { _layoutCacheSizeForTests, measureAndWrap, paintTextLayer } from "../src/text.js";
 
 function makeTextLayer(overrides: Partial<TextLayer> = {}): TextLayer {
   return {
@@ -70,5 +70,20 @@ describe("paintTextLayer", () => {
 
     expect(canvasB).toBe(canvasA);
     expect(cache.stats()).toEqual({ hits: 1, misses: 1, bytesUsed: canvasA.width * canvasA.height * 4 });
+  });
+
+  it("does not re-measure layout on a raster-cache hit (AC4/FR5)", () => {
+    const cache = createRasterCache(1024 * 1024);
+    const layer = makeTextLayer({ text: "measure once please" });
+    const sizeBefore = _layoutCacheSizeForTests();
+
+    paintTextLayer(cache, layer, "layer-1");
+    const sizeAfterFirst = _layoutCacheSizeForTests();
+    paintTextLayer(cache, layer, "layer-1");
+    const sizeAfterSecond = _layoutCacheSizeForTests();
+
+    expect(sizeAfterFirst).toBe(sizeBefore + 1);
+    expect(sizeAfterSecond).toBe(sizeAfterFirst);
+    expect(cache.stats().hits).toBe(1);
   });
 });

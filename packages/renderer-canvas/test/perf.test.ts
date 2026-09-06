@@ -91,15 +91,13 @@ describe("Renderer performance — representative 1080p scene (AC7)", () => {
     // Ceiling calibration: 5 repeated local runs of this exact loop (11 cache-hit frames,
     // 1080p working canvas, 3 layers/frame: text blit + rect blit + image drawImage) on
     // this sandboxed environment observed individual samples ranging ~5.6-18.3ms and a
-    // per-run p95 of roughly 9.8-14.0ms. The proposal's target upper bound is 20ms/frame
-    // measured on an M3; this sandbox's CPU is a shared/unknown quantity (this is a
-    // sandboxed CI-like container, not dedicated hardware) that could be slower on a bad
-    // day, so the ceiling below sits with real margin above both the proposal's number and
-    // everything actually observed here (>3.5x the worst p95 seen, >2.7x the single
-    // slowest sample seen) — a real regression guard (catches an order-of-magnitude
-    // slowdown in the cache-hit paint path) rather than a flaky tripwire tied to this one
-    // machine's exact clock speed.
-    const CEILING_MS = 50;
+    // per-run p95 of roughly 9.8-14.0ms. spec.md AC7's stated target is "under 20ms/frame"
+    // (measured on an M3) — the ceiling below sits close to that stated target (25ms, ~1.8x
+    // the worst p95 actually observed here) rather than far above it, so a real regression
+    // into the 20-50ms range is still caught. This sandbox's CPU is a shared/unknown
+    // quantity, so some margin over the spec's literal 20ms is kept to avoid flakiness from
+    // this one machine's clock speed, not to hide slower-than-target performance.
+    const CEILING_MS = 25;
     expect(p95).toBeLessThan(CEILING_MS);
 
     // Sanity check RenderStats agrees there were exactly SCENE_COUNT frames recorded

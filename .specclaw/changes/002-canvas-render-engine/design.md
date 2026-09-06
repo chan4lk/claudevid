@@ -174,7 +174,7 @@ limitation noted in spec.md.
 | `packages/renderer-canvas/src/draw-shapes.ts` | create | rect/border painters (no gradients — FR7) |
 | `packages/renderer-canvas/src/draw-image.ts` | create | decode cache, fit modes |
 | `packages/renderer-canvas/src/stats.ts` | create | `RenderStats` accumulator |
-| `packages/renderer-canvas/src/index.ts` | create | `Renderer`, `renderFrame`, hold-frame reuse, group recursion |
+| `packages/renderer-canvas/src/index.ts` | create | `Renderer`, `renderFrame`, hold-frame reuse (no group recursion needed — FR9) |
 | `packages/renderer-canvas/test/*.test.ts` | create | 7 test files per Architecture |
 
 ## Data Model Changes
@@ -224,10 +224,12 @@ Public exports from `@claudevid/renderer-canvas`:
 6. **512 MB default cache ceiling, configurable, not further subdivided.** Matches the
    proposal's own suggested default; per-layer-type sub-limits are not built because no
    proposal or spec requirement calls for them (YAGNI).
-7. **`draw-group` is not a separate file.** Group composition is a `ctx.save/translate/
-   clip/restore` bracket around recursive painter dispatch in `index.ts` — it is not a
-   distinct rendering mechanism the way text/shape/image painters are, so giving it its own
-   file would be a hollow abstraction (three lines of orchestration, not a painter).
+7. **`draw-group` doesn't exist, and `index.ts` has no group-handling code at all.** Verified
+   during implementation (not the original design-time guess this section used to describe):
+   core's `flattenLayers` already recurses into `group.children` and emits each child as an
+   independent, absolutely-positioned `TimelineLayer` — `Timeline.activeAt` never hands the
+   renderer a group to recurse into. `index.ts`'s layer-type switch just has `default:
+   continue` for the group's own (now inert-for-positioning) entry. See spec.md FR9.
 
 ## Risks & Mitigations
 

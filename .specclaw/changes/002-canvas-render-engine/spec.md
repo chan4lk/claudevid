@@ -57,10 +57,17 @@ this environment (documented in design.md, not assumed):
   from the original proposal text are dropped: core's `Layer` union has no `line`/`arrow` type.
 - **FR8 — Image painter.** `draw-image.ts`: decode once (keyed by `src`), cache the decoded
   bitmap, then paint per fit mode (`cover`/`contain`/`fill`) against the layer's resolved box.
-- **FR9 — Group composition.** `group` layers (from core's `Layer` union) paint their children
-  inside a `ctx.save()`/`ctx.translate()`/optional-clip/`ctx.restore()` bracket. Composition
-  lives in `index.ts`'s `renderFrame` orchestration — no separate file, since it is
-  recursion over the same painter dispatch, not a distinct mechanism.
+- **FR9 — Group composition.** Verified during implementation: core's `compileTimeline`
+  (`flattenLayers`) already recurses into `group.children` and flattens each child into its
+  own independent `TimelineLayer` with absolute resolved coordinates — `Timeline.activeAt`
+  hands the renderer a flat list where group children are indistinguishable from top-level
+  layers. `index.ts` therefore needs **no group-specific code at all**: its layer-type switch
+  has a `default: continue` that silently skips the group's own entry (`type: "group"`), and
+  children are already dispatched to their real painter. There is no `ctx.translate`/clip
+  bracket and no recursion in this package — that was the pre-implementation design guess in
+  an earlier revision of this file, superseded once `flattenLayers` was actually read. Note:
+  this also means a group's own `x`/`y` currently has no effect on its children's position
+  (tracked as a known limitation in `GOALS.md`'s 003 section, not solved here).
 - **FR10 — Scene culling.** `renderFrame` paints exactly `timeline.activeAt(frame)` — core
   already computes this; the renderer does not re-derive active-layer membership.
 - **FR11 — Hold-frame reuse.** If `timeline.activeAt(frame)` is the identical set of

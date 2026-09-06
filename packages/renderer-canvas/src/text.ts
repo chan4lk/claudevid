@@ -54,11 +54,27 @@ function contentHash(parts: (string | number | undefined)[]): string {
   return parts.map((p) => String(p)).join("|");
 }
 
+// Layout (measure+wrap) is cached alongside the rasterized bitmap, keyed identically, so a
+// raster-cache hit also skips re-measuring (FR5/AC4 — "a hold frame re-measures nothing").
+const layoutCache = new Map<string, TextLayoutResult>();
+
+function getOrMeasure(key: string, layer: TextLayer): TextLayoutResult {
+  const cached = layoutCache.get(key);
+  if (cached) return cached;
+  const layout = measureAndWrap(measureCtx, layer);
+  layoutCache.set(key, layout);
+  return layout;
+}
+
+/** Test-only introspection — proves a raster-cache hit skips re-measuring (AC4/FR5). */
+export function _layoutCacheSizeForTests(): number {
+  return layoutCache.size;
+}
+
 // `cacheKeyPrefix` (the caller's layerKey) is accepted for signature symmetry with sibling
 // paint*Layer functions but deliberately NOT hashed in: per FR4, two layers with identical
 // text/font/color should share one cached bitmap rather than duplicating it per layer.
 export function paintTextLayer(cache: RasterCache, layer: TextLayer, _cacheKeyPrefix: string): Canvas {
-  const { lines, lineHeightPx, totalWidth, totalHeight } = measureAndWrap(measureCtx, layer);
   const key = contentHash([
     layer.text,
     layer.fontSize,
@@ -69,6 +85,7 @@ export function paintTextLayer(cache: RasterCache, layer: TextLayer, _cacheKeyPr
     layer.lineHeight,
     layer.align,
   ]);
+  const { lines, lineHeightPx, totalWidth, totalHeight } = getOrMeasure(key, layer);
   return cache.getOrRender(key, Math.ceil(totalWidth), Math.ceil(totalHeight), (ctx) => {
     ctx.font = fontString(layer);
     ctx.textBaseline = "top";
