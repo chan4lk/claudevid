@@ -97,30 +97,30 @@ duplicate its timing arithmetic or coordinate resolution.
 
 ## Acceptance Criteria
 
-1. `parseSpec` accepts a minimal valid spec (1 scene, 1 text layer) and returns `{ ok: true }`.
-2. `parseSpec` rejects a spec with an out-of-range `fontSize` and returns a diagnostic whose
-   `path` is a correct JSON pointer to the offending field.
-3. `parseSpec` rejects a `group` nested 3 levels deep with a diagnostic naming the path,
-   not a raw stack-overflow or Zod internal error.
-4. `compileTimeline` on a spec with scenes of duration `[2.5, 3.333, 1.0]` at `fps: 30`
-   produces `sceneWindows` whose frame counts are each `Math.round(duration * 30)` and whose
-   `startFrame`/`endFrame` are contiguous with no gap or overlap.
-5. `compileTimeline` on a spec with 3600 one-second scenes at `fps: 24` (a 1-hour timeline)
-   produces a `frameCount` exactly equal to the sum of the per-scene rounded frame counts —
-   proving no drift from repeated float summation.
-6. `compileTimeline` on a scene with `duration: "auto"` and no matching `audioDurations` entry
-   throws `MissingAudioDurationError` naming the scene's `id`.
-7. `compileTimeline` on a scene with `duration: "auto"` and a matching `audioDurations` entry
-   produces a frame window sized from that entry, not from any default.
-8. `activeAt(frame)` returns exactly the layers whose resolved `[startFrame, endFrame)`
-   contains `frame`, for a spec where a layer's `start`/`duration` is a strict subset of its
-   scene's window.
-9. `registerLayer("caption", captionLayerSchema)` (simulating change 006) allows `parseSpec`
-   to accept a spec containing a `caption`-type layer, without any edit to `layers.ts`.
-10. The JSON Schema emitted by `json-schema.ts` validates the same minimal spec from AC1 when
-    checked with a standard JSON Schema validator (round-trip proof against the Zod schema).
-11. `pnpm --filter @claudevid/core build` and `pnpm --filter @claudevid/core test` both
-    succeed from a clean checkout.
+- **AC1:** `parseSpec` accepts a minimal valid spec (1 scene, 1 text layer) and returns `{ ok: true }`.
+- **AC2:** `parseSpec` rejects a spec with an out-of-range `fontSize` and returns a diagnostic whose
+  `path` is a correct JSON pointer to the offending field.
+- **AC3:** `parseSpec` rejects a `group` nested 3 levels deep with a diagnostic naming the path,
+  not a raw stack-overflow or Zod internal error.
+- **AC4:** `compileTimeline` on a spec with scenes of duration `[2.5, 3.333, 1.0]` at `fps: 30`
+  produces `sceneWindows` whose frame counts are each `Math.round(duration * 30)` and whose
+  `startFrame`/`endFrame` are contiguous with no gap or overlap.
+- **AC5:** `compileTimeline` on a spec with 3600 one-second scenes at `fps: 24` (a 1-hour timeline)
+  produces a `frameCount` exactly equal to the sum of the per-scene rounded frame counts —
+  proving no drift from repeated float summation.
+- **AC6:** `compileTimeline` on a scene with `duration: "auto"` and no matching `audioDurations` entry
+  throws `MissingAudioDurationError` naming the scene's `id`.
+- **AC7:** `compileTimeline` on a scene with `duration: "auto"` and a matching `audioDurations` entry
+  produces a frame window sized from that entry, not from any default.
+- **AC8:** `activeAt(frame)` returns exactly the layers whose resolved `[startFrame, endFrame)`
+  contains `frame`, for a spec where a layer's `start`/`duration` is a strict subset of its
+  scene's window.
+- **AC9:** `registerLayer("caption", captionLayerSchema)` (simulating change 006) allows `parseSpec`
+  to accept a spec containing a `caption`-type layer, without any edit to `layers.ts`.
+- **AC10:** The JSON Schema emitted by `json-schema.ts` validates the same minimal spec from AC1 when
+  checked with a standard JSON Schema validator (round-trip proof against the Zod schema).
+- **AC11:** `pnpm --filter @claudevid/core build` and `pnpm --filter @claudevid/core test` both
+  succeed from a clean checkout.
 
 ## Edge Cases
 
