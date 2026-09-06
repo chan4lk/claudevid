@@ -1,0 +1,145 @@
+import { createCanvas } from "@napi-rs/canvas";
+import type { Timeline, TimelineLayer } from "@claudevid/core";
+import { createRasterCache, type RasterCache } from "./raster-cache.js";
+import { createStatsCollector, type RenderStats } from "./stats.js";
+import { registerBundledFonts } from "./fonts.js";
+import { paintTextLayer } from "./text.js";
+import { paintRectLayer } from "./draw-shapes.js";
+import { paintImageLayer } from "./draw-image.js";
+import type { FrameBuffer } from "./frame-buffer.js";
+
+export type { FrameBuffer } from "./frame-buffer.js";
+export { createFrameBuffer, createFrameBufferPool } from "./frame-buffer.js";
+export type { RenderStats } from "./stats.js";
+
+const DEFAULT_CACHE_LIMIT_BYTES = 512 * 1024 * 1024;
+const DEFAULT_BACKGROUND = "#000000";
+
+export interface RenderFrameOptions {
+  scale?: number;
+}
+
+export interface CreateRendererOptions {
+  cacheLimitBytes?: number;
+}
+
+export interface Renderer {
+  renderFrame(timeline: Timeline, frame: number, target: FrameBuffer, opts?: RenderFrameOptions): Promise<void>;
+  stats(): RenderStats;
+  dispose(): void;
+}
+
+/**
+ * `width`/`height` fix the one working canvas for this Renderer's lifetime, and every
+ * `target: FrameBuffer` passed to `renderFrame` must be sized to match (FR3's raw-copy
+ * extraction is a straight `Buffer` copy, no resampling). `opts.scale` in `renderFrame` is
+ * NOT a ratio against a spec's native resolution — `Timeline` (core's compiled output)
+ * exposes no width/height, only pixel-resolved layer coordinates, so there is nothing to
+ * divide by here. It is a direct multiplier handed straight to `ctx.scale(scale, scale)`:
+ * callers that want a scaled-down preview construct a smaller Renderer (e.g. 1280x720) and
+ * pass `scale = 1280 / <spec width>` themselves, so `Timeline`-resolved coordinates (always
+ * in the spec's native pixel space) land in the right place on the smaller canvas.
+ */
+export function createRenderer(width: number, height: number, opts: CreateRendererOptions = {}): Renderer {
+  registerBundledFonts();
+
+  const workingCanvas = createCanvas(width, height);
+  const ctx = workingCanvas.getContext("2d");
+  const cacheLimitBytes = opts.cacheLimitBytes ?? DEFAULT_CACHE_LIMIT_BYTES;
+  let cache: RasterCache = createRasterCache(cacheLimitBytes);
+  let stats = createStatsCollector();
+
+  // Hold-frame reuse (FR11): `previousOutput` is an independent `Buffer.from` snapshot,
+  // not a view into `target.data` — the caller owns `target` and may reuse/mutate it
+  // (e.g. a FrameBuffer pool) between calls, so aliasing into it would go stale.
+  let previousLayerKeys: string | null = null;
+  let previousOutput: Buffer | null = null;
+
+  async function paintFrame(active: TimelineLayer[], scale: number): Promise<void> {
+    // Background is per-scene, not per-layer: every active layer in the same frame shares
+    // the same scene and therefore the same `background` string (set once by core's
+    // `flattenLayers`), so painting it once from the first active layer (or the opaque
+    // default) avoids a redundant full-canvas fillRect per layer.
+    const background = active[0]?.background ?? DEFAULT_BACKGROUND;
+    ctx.fillStyle = background;
+    // Unscaled and outside the `ctx.scale` bracket below: the working canvas is reused
+    // across calls (FR1 — no per-frame allocation), so a scale < 1 must still clear the
+    // *entire* physical canvas or the previous frame's pixels bleed through around the edges.
+    ctx.fillRect(0, 0, workingCanvas.width, workingCanvas.height);
+
+    ctx.save();
+    ctx.scale(scale, scale);
+    for (const layer of active) {
+      const layerStart = Date.now();
+      switch (layer.layer.type) {
+        case "text": {
+          const bitmap = paintTextLayer(cache, layer.layer, layer.layerKey);
+          ctx.drawImage(bitmap, layer.x, layer.y);
+          break;
+        }
+        case "rect": {
+          const bitmap = paintRectLayer(cache, layer.layer);
+          ctx.drawImage(bitmap, layer.x, layer.y);
+          break;
+        }
+        case "image": {
+          await paintImageLayer(ctx, layer.layer, layer.x, layer.y);
+          break;
+        }
+        default:
+          // "group" (already flattened into per-child entries by core's `flattenLayers` —
+          // see timeline.ts) and any future layer type registered via `registerLayer` with
+          // no painter here yet: skip silently, no error (FR9/dispatch contract).
+          continue;
+      }
+      stats.recordLayerTypeMs(layer.layer.type, Date.now() - layerStart);
+    }
+    ctx.restore();
+  }
+
+  return {
+    async renderFrame(timeline, frame, target, frameOpts = {}) {
+      const frameStart = Date.now();
+      const active = timeline.activeAt(frame);
+      const keySignature = active
+        .map((l) => l.layerKey)
+        .sort()
+        .join(",");
+
+      if (keySignature === previousLayerKeys && previousOutput) {
+        previousOutput.copy(target.data);
+        stats.recordHoldFrame();
+        stats.recordFrameMs(Date.now() - frameStart);
+        return;
+      }
+
+      await paintFrame(active, frameOpts.scale ?? 1);
+
+      workingCanvas.data().copy(target.data);
+      previousOutput = Buffer.from(target.data);
+      previousLayerKeys = keySignature;
+      stats.recordPaint();
+      stats.recordFrameMs(Date.now() - frameStart);
+    },
+    stats() {
+      // Cache hit/miss counts live on `RasterCache`, not `StatsCollector` (painters only
+      // ever see the cache, never the stats collector) — merge them in here so
+      // `renderer.stats()` is the one place callers read a complete `RenderStats`.
+      const cacheStats = cache.stats();
+      return { ...stats.stats(), cacheHits: cacheStats.hits, cacheMisses: cacheStats.misses };
+    },
+    dispose() {
+      // Dispose contract (AC9): replace both the raster cache and the stats collector with
+      // fresh instances, rather than throwing on reuse. A `stats()` call after `dispose()`
+      // therefore reports an all-zero `RenderStats` (`cacheHits: 0`, `cacheMisses: 0`,
+      // `msPerFrame: []`, ...) — a clean-slate Renderer, not a poisoned one. A subsequent
+      // `renderFrame` call still works; it just repaints everything (empty cache) and
+      // restarts hold-frame tracking (`previousOutput`/`previousLayerKeys` reset too).
+      cache.dispose();
+      cache = createRasterCache(cacheLimitBytes);
+      stats = createStatsCollector();
+      previousLayerKeys = null;
+      previousOutput = null;
+    },
+  };
+}
