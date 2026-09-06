@@ -40,6 +40,9 @@ export const textLayerSchema = z.object({
   fontWeight: z.number().min(100).max(900).optional(),
   color: z.string().optional(),
   fontFamily: z.string().optional(),
+  maxWidth: z.number().positive().optional(),
+  lineHeight: z.number().positive().optional(),
+  align: z.enum(["left", "center", "right"]).optional(),
 });
 export type TextLayer = z.infer<typeof textLayerSchema>;
 

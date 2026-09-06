@@ -33,6 +33,9 @@ duplicate its timing arithmetic or coordinate resolution.
   easing?: string }` — the `enter`/`exit` values are opaque strings, **not** a fixed enum;
   change 003 owns the live preset registry and validates against it, so core never bakes in a
   closed preset list that a future preset addition would force a version bump to change).
+  `text` also carries `maxWidth?`/`lineHeight?`/`align?` ("left"|"center"|"right") — discovered
+  as a real gap while building change 002's word-wrap painter, added here rather than in 002
+  because word-wrap bounds are spec content Claude authors, not a renderer-only concern.
   `registerLayer(type, zodSchema)` lets 004 (`code`) and 006 (`captions`) add layer types
   without editing core; the discriminated union is rebuilt lazily on registration.
 - **FR4 — `group` layer & nesting cap.** `group` has `children: Layer[]` (recursive via

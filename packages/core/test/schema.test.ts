@@ -28,4 +28,18 @@ describe("videoSpecSchema", () => {
     });
     expect(result.success).toBe(true);
   });
+
+  it("accepts a text layer's wrap/line-height/align fields (change 002's word-wrap consumes these)", () => {
+    const result = videoSpecSchema.safeParse({
+      version: 1,
+      scenes: [
+        {
+          id: "a",
+          duration: 1,
+          layers: [{ type: "text", text: "hello", maxWidth: 400, lineHeight: 1.4, align: "left" }],
+        },
+      ],
+    });
+    expect(result.success).toBe(true);
+  });
 });
