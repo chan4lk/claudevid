@@ -1,5 +1,10 @@
 import { GlobalFonts } from "@napi-rs/canvas";
-import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
+
+// `import.meta.resolve` isn't implemented by vite-node (vitest's module runner), which
+// would make this function throw under this package's own test suite. `createRequire`
+// resolves the same package-relative paths and works under both plain Node and vite-node.
+const resolve = createRequire(import.meta.url).resolve;
 
 export const SANS_FONT_FAMILY = "Inter, sans-serif";
 export const MONO_FONT_FAMILY = "JetBrains Mono, monospace";
@@ -15,8 +20,7 @@ let registered = false;
 export function registerBundledFonts(): void {
   if (registered) return;
   for (const [specifier, family] of FONTS) {
-    const path = fileURLToPath(import.meta.resolve(specifier));
-    GlobalFonts.registerFromPath(path, family);
+    GlobalFonts.registerFromPath(resolve(specifier), family);
   }
   registered = true;
 }
