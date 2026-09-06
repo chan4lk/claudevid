@@ -1,16 +1,16 @@
 # 🦞 SpecClaw Dashboard
 
 **Project:** claudevid
-**Last Updated:** 2026-09-06 18:07 UTC
+**Last Updated:** 2026-09-06 18:52 UTC
 
 ## Active Changes
 
-_No active changes._
+
+- 📝 **001-videospec-core** — tasks done | 0/13 tasks (0%) | 0 failed
 
 ## Pending Proposals
 
 
-- 📋 **001-videospec-core** — proposal ready, awaiting planning
 - 📋 **002-canvas-render-engine** — proposal ready, awaiting planning
 - 📋 **003-motion-system** — proposal ready, awaiting planning
 - 📋 **004-code-block-layer** — proposal ready, awaiting planning
@@ -24,6 +24,6 @@ _None._
 
 ## Stats
 
-- **Total changes:** 0
-- **Active:** 0
+- **Total changes:** 1
+- **Active:** 1
 - **Completed:** 0

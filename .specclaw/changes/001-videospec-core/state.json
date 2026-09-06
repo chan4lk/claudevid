@@ -3,6 +3,9 @@
   "phase": "build",
   "branch": "specclaw/001-videospec-core",
   "phases": {
+    "spec": {"status":"done","at":"2026-09-06T18:50:37Z"},
+    "design": {"status":"done","at":"2026-09-06T18:51:33Z"},
+    "tasks": {"status":"done","at":"2026-09-06T18:52:15Z"},
     "build": {"status":"in-progress","at":"2026-09-06T18:53:16Z"}
   }
 }
