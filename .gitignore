@@ -9,3 +9,14 @@
 
 # Built Visual Studio Code Extensions
 *.vsix
+
+# Node / pnpm
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Local session state (not part of the repo)
+.session-id
+
+# specclaw verify run logs (ephemeral, regenerated each run)
+.specclaw/changes/*/logs/

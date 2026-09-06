@@ -1,13 +1,13 @@
 # 🦞 SpecClaw Dashboard
 
 **Project:** claudevid
-**Last Updated:** 2026-09-06 19:27 UTC
+**Last Updated:** 2026-09-06 19:36 UTC
 
 ## Active Changes
 
 
-- 🔀 **001-videospec-core** — PR #1 open
-- 📝 **002-canvas-render-engine** — tasks done | 0/12 tasks (0%) | 0 failed
+- 🔍 **001-videospec-core** — verify PASS | 13/13 tasks (100%) | 0 failed | PR #1 open
+- 🔨 **002-canvas-render-engine** — build in-progress | 0/12 tasks (0%) | 0 failed
 
 ## Pending Proposals
 
