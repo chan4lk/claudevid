@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "sig": "1796286027 9077",
+  "tier": "deep",
+  "tier_source": "classifier",
+  "rationale": "Unresolved questions about narration schema location and duration-auto support change what gets built, audio moves before timeline with mandatory AudioDurations feedback into 001's compileTimeline, and captions become a new persisted layer in the core schema.",
+  "domains": ["data", "ops"],
+  "seats": [
+    {"role": "party-po", "model": "sonnet"},
+    {"role": "party-architect", "model": "opus"},
+    {"role": "party-ba", "model": "sonnet"},
+    {"role": "party-security", "model": "opus"},
+    {"role": "party-visionary", "model": "fable"}
+  ],
+  "dropped": []
+}

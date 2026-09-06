@@ -1,0 +1,50 @@
+### [BLOCK] party-architect — Captions layer placed in `packages/audio` while its schema, rendering and animation are owned by three other packages
+**Quotes:** > A `captions` layer registered into core, rendered by change 002, animated by change 003:
+**Quotes:** > - `packages/audio/src/captions/` — captions layer schema, layout, styles, word emphasis
+**Problem:** The proposal itself states the captions layer is registered into core, rendered by 002 and animated by 003, then puts its schema, layout and styles inside the audio package. Layer schema belongs where every other layer schema lives (core, per the "registered into core" phrasing); layout and style belong with the renderer that draws them. Placing them in `packages/audio` makes the render package depend on the audio package — or forces a duplicate caption schema on the core side — for a layer whose only audio input is a `{word,start,end}[]` array. The seam that keeps this clean is: audio emits word timings, core owns the layer schema, 002 owns layout/draw, 003 owns emphasis tracks.
+**Fix:** Reduce `packages/audio` to producing word timings and, if needed, caption *cue grouping*. Move the layer schema to core and layout/styles to the rendering package, or state explicitly in the artifact why 002 must import from 006.
+
+### [BLOCK] party-architect — Second content-hash cache alongside the change-005 mechanism the proposal names
+**Quotes:** > cached under `.claudevid/cache/tts/`. Editing one sentence re-synthesizes one block. This mirrors change 005's chunk resume and is what makes the edit loop survivable.
+**Quotes:** > - `packages/audio/src/cache.ts` — content-hash TTS cache
+**Quotes:** > footprint and where it lives (`~/.cache/claudevid/`?) needs deciding before anyone ships this
+**Problem:** The artifact names an existing mechanism ("change 005's chunk resume"), says the new cache *mirrors* it, and then builds a separate `cache.ts` anyway with no stated reason 005's cache cannot be extended or shared. Two content-addressed caches in one product diverge on the first change to key derivation, eviction, or invalidation-on-version-bump. Worse, the artifact gives two different roots for on-disk state in the same document — `.claudevid/cache/tts/` (project-relative) for TTS artifacts and `~/.cache/claudevid/` (home-relative) for models — so this commit lands two cache roots as well as two cache implementations.
+**Fix:** Either reuse/extend the change-005 cache layer for TTS blocks, or state in the artifact what 005's cache cannot do. Pick one cache root and one root-resolution helper for both models and TTS output.
+
+### [BLOCK] party-architect — Co-change to `compileTimeline`'s signature and all its existing callers is unnamed
+**Quotes:** > The audio pipeline measures the synthesized block and supplies an `AudioDurations` map to change 001's `compileTimeline`
+**Quotes:** > **Recommendation: yes, with an optional `AudioDurations` argument**, so core stays I/O-free and 006 does not force a schema break.
+**Quotes:** > - **Files affected:** ~20 new
+**Problem:** This change adds a parameter to a core function in another package and adds `"auto"` as an accepted value of `duration`, but the Impact section counts only new files and the Scope section lists no core-side edits at all. At minimum the same commit must touch: `compileTimeline`'s signature, the `duration` field's type/validator in the 001 schema (a string union alongside a number), every existing call site of `compileTimeline`, and existing timeline tests that assert numeric durations. The proposal calls this "a genuine cross-change coupling into 001's timeline compilation" under Risk but never enumerates it as work, so the merge half-lands: audio can produce durations that core still rejects at validation.
+**Fix:** Enumerate the core-side co-changes in Scope — schema union for `duration`, `compileTimeline` signature, call sites, validator, existing tests — and state whether 001 must merge first or in the same commit.
+
+### [BLOCK] party-architect — Forced alignment described as a constrained problem but built on an unconstrained transcriber
+**Quotes:** > We run **whisper.cpp** (Metal-accelerated on M3) over the *generated* audio to get word-level timestamps. Aligning against synthetic speech with a known reference transcript is a far easier problem than open transcription, so accuracy is high.
+**Quotes:** > whisper.cpp may mis-segment `kubectl` or
+**Quotes:** > `useEffect`. Since we know the reference transcript, is constrained/forced alignment against it
+**Quotes:** > reliable enough, or do we need a fallback (proportional distribution across a phrase) when
+**Quotes:** > confidence is low?
+**Problem:** The design justifies whisper.cpp by asserting the problem is *forced alignment* (transcript known), but whisper.cpp is an open transcriber — it emits its own token sequence, which may not match the reference text at all. The proposal's own Open Question concedes this. That leaves the load-bearing contract of the whole change undefined: what happens when the recognized token stream and the reference transcript disagree? Word timings are the single artifact that drives captions, motion sync and SRT/VTT, so a token-mismatch reconciliation step (align recognized tokens to reference tokens; decide per-word what `start`/`end` means for an unmatched word) is a required component, not a fallback. It appears in neither Scope nor the file list.
+**Fix:** Name the reconciliation component in Scope (recognized-to-reference token alignment plus the proportional-distribution fallback) and specify its output contract: whether every reference word is guaranteed a timing, and what marks a low-confidence one.
+
+### [WARN] party-architect — The word-timing artifact is the shared contract of four consumers and is specified only as `{ word, start, end }[]`
+**Quotes:** > Output: `{ word, start, end }[]` per block. This single artifact drives captions, speech-synced
+**Quotes:** > motion, and SRT/VTT export.
+**Quotes:** > - reads the same word timings, so captions cannot drift from the audio by construction
+**Problem:** Four consumers (captions layer, 003 emphasis tracks, SRT, VTT) share this type and an implementer must guess: are `start`/`end` block-relative or timeline-absolute, and if block-relative, who applies the offset and how does head/tail padding interact with it? Is `word` the reference token or whisper's token (see the mismatch above)? Is punctuation a word? Are lexicon respellings reflected in `word`, so a caption would render the phoneme spelling rather than `kubectl`? Two implementers will answer these differently, and the "cannot drift by construction" claim only holds if the offset convention is stated once.
+**Fix:** Specify the timing origin (block-relative vs absolute) and who applies padding/offset, whether `word` is always the reference-transcript surface form, and how punctuation and lexicon-substituted terms appear.
+
+### [WARN] party-architect — No deterministic test seam for tests that all depend on two native ML runtimes
+**Quotes:** > - Tests: timing-drift assertion (captions vs audio), ducking level check, loudness target check,
+**Quotes:** >   cache-hit behaviour on single-sentence edit
+**Quotes:** > - **Risk:** medium-high — two native ML runtimes (onnxruntime-node, whisper.cpp) with model
+**Quotes:** >   downloads and Apple Silicon build variance, plus a genuine cross-change coupling into 001's
+**Problem:** Every listed test as written runs the real stack: timing-drift needs Kokoro plus whisper, cache-hit needs a real synthesis to populate the cache, ducking and loudness need real FFmpeg over real audio. Combined with model download-on-first-use and Apple Silicon build variance the proposal itself flags, these become the tests that get `skip`-ped in CI. There is no named interface between the pipeline and the two runtimes — no `synthesize()`/`align()` boundary with a fake — so there is nowhere to insert one later without restructuring. Note the cache-hit test in particular needs no model at all if synthesis is behind a seam.
+**Fix:** Name the two injection points in Scope (a synthesis interface and an alignment interface) so cache, durations, graph-construction and SRT/VTT tests run against fixtures, and mark the runtime-dependent tests as a separately-gated integration tier.
+
+### [NOTE] party-architect — FFmpeg is invoked from two packages with no stated shared invocation layer
+**Quotes:** > - `packages/audio/src/graph.ts` — FFmpeg filter graph: gain, fades, ducking, loudnorm
+**Quotes:** > - `packages/audio/src/mux.ts` — final mux into change 005's output
+**Quotes:** > final mux against change 005's silent video with `-c:v copy -c:a aac`
+**Problem:** Change 005 is named as the encoder and this change invokes FFmpeg independently for the graph and the mux. That means two packages resolve the FFmpeg binary path, two decide how to handle a non-zero exit, and two parse whatever FFmpeg writes to stderr. No correctness consequence at this commit, but the binary-resolution and exit-handling decision has one owner's worth of logic and two implementations.
+**Fix:** State whether 006 reuses 005's FFmpeg invocation helper or deliberately owns its own, and if the latter, why.

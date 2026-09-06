@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "sig": "3023653274 8911",
+  "tier": "standard",
+  "tier_source": "classifier",
+  "rationale": "Introduces a new concurrent encoder package (~20 files, all additive) with complex FFmpeg orchestration, caching, and keyframe alignment; all edits are independently revertible and open questions are implementation details within the scoped architecture.",
+  "domains": [],
+  "seats": [
+    {"role": "party-po", "model": "sonnet"},
+    {"role": "party-architect", "model": "opus"},
+    {"role": "party-ba", "model": "sonnet"}
+  ],
+  "dropped": []
+}

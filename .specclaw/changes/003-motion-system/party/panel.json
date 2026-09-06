@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "sig": "209114047 10920",
+  "tier": "deep",
+  "tier_source": "classifier",
+  "rationale": "Unresolved design questions about motion vocabulary surface and transition overlapping would alter the core schema and API, combined with persistent animation properties in layer objects.",
+  "domains": ["data"],
+  "seats": [
+    {"role": "party-po", "model": "sonnet"},
+    {"role": "party-architect", "model": "opus"},
+    {"role": "party-ba", "model": "sonnet"},
+    {"role": "party-security", "model": "opus"},
+    {"role": "party-visionary", "model": "fable"}
+  ],
+  "dropped": []
+}

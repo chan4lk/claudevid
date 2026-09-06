@@ -1,0 +1,10 @@
+{
+  "tier": "standard",
+  "domains": [],
+  "rationale": "Introduces a new concurrent encoder package (~20 files, all additive) with complex FFmpeg orchestration, caching, and keyframe alignment; all edits are independently revertible and open questions are implementation details within the scoped architecture.",
+  "signals": {
+    "blast_radius": "Eight new core modules in encoder-ffmpeg package plus tools/bench; integration in changes 006/007 is additive (new function calls)",
+    "unresolved": "Six open questions about bitrate tuning, chunked vs single-pipe default, pool sizing, memory ceiling, cache location, and Linux support; all are implementation choices within the committed concurrent architecture",
+    "irreversibility": "New package is git-revertible; no data migration, capability removal, or integration refactoring required"
+  }
+}
