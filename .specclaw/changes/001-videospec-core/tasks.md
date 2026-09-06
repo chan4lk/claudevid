@@ -25,8 +25,7 @@ and package-level wiring.
     build orchestrator (turbo/nx) needed for a 1-package workspace.
 
 - [ ] `T2` — `packages/core` package scaffold
-  - Files: `packages/core/package.json`, `packages/core/tsup.config.ts`,
-    `packages/core/vitest.config.ts`
+  - Files: `packages/core/package.json`, `packages/core/tsup.config.ts`, `packages/core/vitest.config.ts`
   - Estimate: small
   - Kind: config
   - Depends: T1
@@ -123,8 +122,7 @@ and package-level wiring.
     window), plus edge cases from spec.md (zero-length scene, non-dividing fps).
 
 - [ ] `T12` — Schema/layers/diagnostics/registry tests
-  - Files: `packages/core/test/schema.test.ts`, `packages/core/test/layers.test.ts`,
-    `packages/core/test/diagnostics.test.ts`
+  - Files: `packages/core/test/schema.test.ts`, `packages/core/test/layers.test.ts`, `packages/core/test/diagnostics.test.ts`
   - Estimate: medium
   - Kind: test
   - Depends: T5
@@ -132,8 +130,7 @@ and package-level wiring.
     scene-id rejection, nesting-cap diagnostic path correctness.
 
 - [ ] `T13` — Resolve/easing/json-schema tests + package build verification
-  - Files: `packages/core/test/resolve.test.ts`, `packages/core/test/easing.test.ts`,
-    `packages/core/test/json-schema.test.ts`
+  - Files: `packages/core/test/resolve.test.ts`, `packages/core/test/easing.test.ts`, `packages/core/test/json-schema.test.ts`
   - Estimate: small
   - Kind: test
   - Depends: T6, T7, T9, T10
