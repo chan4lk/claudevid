@@ -6,3 +6,6 @@ export type { SpringSpec, BakedSpring, EasingFn } from "./easing.js";
 
 export { evaluate } from "./track.js";
 export type { Track, ResolvedTrack, EasingRef } from "./track.js";
+
+export { resolvePreset, exportCatalogue } from "./presets.js";
+export type { PresetParams, CatalogueEntry } from "./presets.js";
