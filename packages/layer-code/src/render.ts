@@ -23,15 +23,19 @@
 // separately-budgeted instance is constructed locally rather than by widening a sibling
 // package's already-shipped export surface for this one call site.
 //
-// Scope (T7): paints a fully-revealed, non-focused, non-diffed, non-scrolled static block
-// correctly. `reveal`/`focus`/`diff`/`scroll`/`annotations` wiring is a later task's job
-// (`animations.ts`/`diff.ts`/`annotate.ts` don't exist yet) — the extension point is marked
-// below in `renderCodeFrame` so that later task can wire in real animation state without
-// restructuring anything here.
+// T11: `reveal`/`focus`/`diff`/`scroll`/`annotations` are now fully wired — `renderCodeFrame`
+// drives `animations.ts`'s pure `typewriterState`/`focusState`/`scrollOffsetPx` (and
+// `lineStaggerDelays` for `reveal.mode === "line-stagger"`) from `frameLocal`, tints diff
+// backgrounds via `diff.ts`'s `diffLines`, and draws annotations via `annotate.ts`'s
+// `annotationPosition` — see the per-frame state block and per-line loop inside
+// `renderCodeFrame` below.
 
 import { createCanvas, type Canvas, type SKRSContext2D } from "@napi-rs/canvas";
 import type { TimelineLayer } from "@claudevid/core";
-import type { CodeLayer } from "./schema.js";
+import { focusState, lineStaggerDelays, scrollOffsetPx, typewriterState } from "./animations.js";
+import { annotationPosition } from "./annotate.js";
+import { diffLines } from "./diff.js";
+import type { CodeAnnotation, CodeDiff, CodeLayer } from "./schema.js";
 import {
   CHROME_BORDER_PX,
   CHROME_PADDING_PX,
@@ -45,6 +49,22 @@ import {
 
 // Restated verbatim from `packages/renderer-canvas/src/fonts.ts:10` — see file header note.
 const MONO_FONT_FAMILY = "JetBrains Mono, monospace";
+
+// `PainterFn` (`packages/renderer-canvas/src/painters.ts`) is `(entry, timelineLayer, frame,
+// ctx) => void` — no `fps` parameter — and neither `TimelineLayer` nor `Timeline`
+// (`packages/core/src/timeline.ts`) carries the compiled `VideoSpec.fps` through to paint time
+// (only `compileTimeline`'s own frame-math, at compile time, uses it). `animations.ts`'s
+// frame-in/state-out functions (spec.md FR10) all take `fps` as an explicit parameter, so a real
+// value is needed here regardless. Widening `PainterFn`'s signature or `TimelineLayer`'s shape to
+// thread a real `fps` through is out of this task's scope (both are files T11 must not touch —
+// `renderer-canvas` and `@claudevid/core` respectively). `VideoSpec.fps`'s own Zod default
+// (`packages/core/src/schema.ts:58`, `z.number().positive().default(30)`) is the smallest
+// defensible stand-in: every animation this file drives is frame-rate-relative
+// (`elapsedSeconds = frameLocal / fps`), so a spec authored at a non-30 fps sees its reveal/
+// focus/scroll/diff timing scaled by the assumed/actual fps ratio — a real, documented
+// limitation, not a silent bug, until a future change threads the compiled spec's real fps
+// through the painter registry.
+const DEFAULT_FPS = 30;
 
 // --- Local IR types (NFR2: never import highlight.ts) -----------------------------------------
 
@@ -369,6 +389,122 @@ function paintLine(tokens: Token[], layoutLine: LayoutLine, fontSize: number, li
   };
 }
 
+/** Truncates a token run to its first `charCount` characters, splitting the last token that
+ * straddles the cut (never a whole-token drop mid-token) — used only for typewriter's single
+ * in-flight line (spec.md FR8/FR10), never for a cached line. */
+function truncateTokens(tokens: Token[], charCount: number): Token[] {
+  if (charCount <= 0) return [];
+  const result: Token[] = [];
+  let remaining = charCount;
+  for (const t of tokens) {
+    if (remaining <= 0) break;
+    if (t.text.length <= remaining) {
+      result.push(t);
+      remaining -= t.text.length;
+    } else {
+      result.push({ ...t, text: t.text.slice(0, remaining) });
+      remaining = 0;
+    }
+  }
+  return result;
+}
+
+/** Locates the visual row + in-row column a source-line char index (`typewriterState`'s
+ * `partialLineChars`, counted against the tab-expanded, pre-wrap line — `layout.ts`'s
+ * `LayoutResult.lineCharCounts`) falls into, mirroring `glyphRows`' own row-cursor walk above
+ * (never re-deriving `layoutLine.rows`' split, only replaying its per-row lengths) — the
+ * typewriter caret's pixel position for a `wrap: "soft"` line that has already wrapped. */
+function caretPosition(layoutLine: LayoutLine, fontSize: number, charIndex: number): { x: number; row: number } {
+  if (layoutLine.rows.length <= 1) return { x: measureLine(charIndex, fontSize), row: 0 };
+  let cursor = 0;
+  for (let r = 0; r < layoutLine.rows.length; r++) {
+    const rowLen = layoutLine.rows[r]!.length;
+    const contentLen = r === 0 ? rowLen : Math.max(0, rowLen - SOFT_WRAP_CONTINUATION_INDENT_CHARS);
+    const isLastRow = r === layoutLine.rows.length - 1;
+    if (charIndex <= cursor + contentLen || isLastRow) {
+      const col = r === 0 ? charIndex - cursor : SOFT_WRAP_CONTINUATION_INDENT_CHARS + (charIndex - cursor);
+      return { x: measureLine(Math.max(0, col), fontSize), row: r };
+    }
+    cursor += contentLen;
+  }
+  return { x: measureLine(charIndex, fontSize), row: 0 };
+}
+
+// --- Diff background tint (spec.md FR11) -------------------------------------------------------
+
+// "a fixed green/red at low alpha" (spec.md FR11's documented default) — the fade-in itself
+// (`diffFadeAlpha` below) further scales this via `ctx.globalAlpha`, so the settled, fully-
+// revealed tint is this colour's own (already-low) alpha, not a value that ramps up to opaque.
+const DEFAULT_ADDED_BG = "rgba(46, 160, 67, 0.18)";
+// Reserved for a future render path that can show a removed line as its own row. `ir.lines`/
+// `layout.lines` (`highlight.ts`/`layout.ts`, both outside T11's file list) are built purely from
+// `layer.code` — diff's **after** state (spec.md FR1) — so a `"removed"` diff entry (one that
+// only ever existed in `diff.before`) has no layout row to tint against in this render path. Kept
+// here, unused, so the constant exists the moment a later change adds that row.
+const DEFAULT_REMOVED_BG = "rgba(248, 81, 73, 0.18)";
+void DEFAULT_REMOVED_BG;
+
+/** `elapsed / duration` fade-in, clamped to `[0, 1]`, starting at `diff.revealDelay` seconds
+ * (spec.md FR11: "fade in over `diff.duration` seconds starting at `diff.revealDelay`"). A small,
+ * deliberate duplication of `animations.ts`'s own unexported `progressFor` shape (linear, no
+ * easing — `diffSchema` has no `easing` field, unlike `focus.animate`/`scroll`) rather than
+ * widening that file's exports for a three-line pure formula this file cannot otherwise reach
+ * (T11 must not modify `animations.ts`). */
+function diffFadeAlpha(diff: CodeDiff, frameLocal: number, fps: number): number {
+  const delay = diff.revealDelay ?? 0;
+  const duration = diff.duration ?? 0;
+  const elapsed = frameLocal / fps - delay;
+  if (duration <= 0) return elapsed >= 0 ? 1 : 0;
+  return Math.min(1, Math.max(0, elapsed / duration));
+}
+
+/** Maps `diff.ts`'s `diffLines(diff.before, code)` output onto `ir.lines`' own index space:
+ * `"removed"` entries are filtered out (they consume `before`'s cursor only, never `after`'s —
+ * see `diff.ts`'s own backtracking doc comment), so what remains, in order, is exactly one entry
+ * per `code.split("\n")` line — the same order/count as `ir.lines`/`layout.lines`. Returns `true`
+ * at index `i` when line `i` is `"added"` (spec.md Edge Cases: `diff.before === code` naturally
+ * yields every entry `"unchanged"`, i.e. every flag `false`, "no special-cased early-return
+ * needed"). */
+function addedLineFlags(diff: CodeDiff, code: string): boolean[] {
+  return diffLines(diff.before, code)
+    .filter((entry) => entry.kind !== "removed")
+    .map((entry) => entry.kind === "added");
+}
+
+// --- Annotations (spec.md FR12; drawn directly, never cached — small count per block) ----------
+
+/** A small colour-bar-plus-label marker at `annotationPosition`'s `(x, y)` (translated by the
+ * caller into the content box's chrome-relative + scroll-adjusted coordinates, the same
+ * `contentLeftPx`/`contentTopPx`/`scrollOffsetPx` translation every line bitmap already gets).
+ * Uncached by design (spec.md FR8: "small count, never cached" note) — a plain direct paint. */
+function paintAnnotationMarker(
+  ctx: SKRSContext2D,
+  annotation: CodeAnnotation,
+  x: number,
+  y: number,
+  lineHeightPx: number,
+  fontSize: number,
+  colors: ChromeColors,
+): void {
+  const color = annotation.color ?? "#f0b429";
+  const markerWidthPx = 4;
+  const labelFontSize = Math.max(11, Math.round(fontSize * 0.65));
+
+  ctx.save();
+  ctx.fillStyle = color;
+  ctx.fillRect(x, y, markerWidthPx, lineHeightPx);
+
+  ctx.font = `600 ${labelFontSize}px ${MONO_FONT_FAMILY}`;
+  ctx.fillStyle = colors.titleBarText;
+  ctx.textBaseline = "middle";
+  ctx.textAlign = "left";
+  // Same "marker bar, then label to its right" layout for both `side`s — `annotationPosition`
+  // (`annotate.ts`) already placed `x` on the declared side (gutter-adjacent for `"left"`, past
+  // the longest line for `"right"`); this function just paints at whatever `x` it is handed.
+  ctx.fillText(annotation.text, x + markerWidthPx + GUTTER_PADDING_PX / 2, y + lineHeightPx / 2);
+  ctx.restore();
+}
+
 function drawLineNumber(ctx: SKRSContext2D, lineNumber: number, y: number, gutterWidthPx: number, fontSize: number, color: string): void {
   ctx.save();
   ctx.font = `400 ${fontSize}px ${MONO_FONT_FAMILY}`;
@@ -381,15 +517,17 @@ function drawLineNumber(ctx: SKRSContext2D, lineNumber: number, y: number, gutte
 
 // --- `paintCodeLayer` (spec.md FR7/FR8/FR9; design.md's `paintCodeLayer` section) --------------
 
-/** The composited-frame entry point: blit chrome, blit each revealed line's cached bitmap at
- * its layout-derived `y` offset, draw line numbers directly (small, uncached — same treatment
- * design.md gives annotations). Throws `CodeOverflowError` first if `entry.blocked` (FR7).
+/** The composited-frame entry point: blit chrome, tint diff backgrounds, blit each revealed
+ * line's cached bitmap at its layout-derived `y` offset (or paint the one in-flight typewriter
+ * line directly, uncached), draw line numbers + annotations directly (small, uncached — spec.md
+ * FR8's "never cached" note), draw the caret if enabled. Throws `CodeOverflowError` first if
+ * `entry.blocked` (FR7).
  *
- * Scope (T7): every line is treated as fully revealed, non-dimmed, non-scrolled — `frameLocal`
- * and `layer.reveal`/`layer.focus`/`layer.diff`/`layer.scroll`/`layer.annotations` are already
- * threaded through as the extension point a later task (wiring `animations.ts`/`diff.ts`/
- * `annotate.ts`) replaces the three `const`s below with real per-frame state, without needing
- * to restructure the cache/paint loop itself. */
+ * T11: `frameLocal` (with `DEFAULT_FPS`, see that constant's own doc comment on why a real `fps`
+ * isn't available here) drives `animations.ts`'s pure `typewriterState`/`lineStaggerDelays`/
+ * `focusState`/`scrollOffsetPx` every call — this function re-derives per-frame state each time
+ * rather than caching it itself, matching every other pure-function-per-frame call site in this
+ * codebase (e.g. `003`'s `compileMotion` resolvers). */
 export function renderCodeFrame(
   entry: CompiledCodeLayer,
   layer: CodeLayer,
@@ -403,20 +541,42 @@ export function renderCodeFrame(
   const theme = layer.theme ?? "github-dark";
   const showLineNumbers = layer.showLineNumbers ?? false;
   const { layout, ir } = entry;
+  const fps = DEFAULT_FPS;
 
   const cKey = chromeKey(layer.width, layer.height, theme, layer.title, showLineNumbers);
   const chrome = chromeCache.getOrRender(cKey, layer.width, layer.height, paintChrome(layer, theme));
   ctx.drawImage(chrome, 0, 0);
 
-  // --- Extension point for a later task (animations.ts/diff.ts/annotate.ts wiring) ---
-  void frameLocal;
-  void layer.reveal;
-  void layer.diff;
-  void layer.scroll;
-  const revealedLineCount = ir.lines.length; // later: typewriterState(...).revealedLines
-  const dimmedRange: readonly [number, number] | null = null; // later: focusState(...).range
-  const scrollOffsetPx = 0; // later: scrollOffsetPx(...)
-  // --- end extension point ---
+  // --- Per-frame animation state (spec.md FR10, animations.ts) ---------------------------------
+  // `revealedCount`/`staggerVisible`/`partialLine*` together decide which of `ir.lines` paint
+  // this frame at all (and, for the one typewriter in-flight line, how much of it) — the reveal
+  // state that D2 says "decides which cache entries get painted", not a `globalAlpha` bracket.
+  let revealedCount = ir.lines.length;
+  let staggerVisible: boolean[] | null = null;
+  let partialLineIndex = -1;
+  let partialLineChars = 0;
+  let caretOn = false;
+
+  if (layer.reveal?.mode === "typewriter") {
+    const state = typewriterState(layer.reveal, frameLocal, fps, layout.lineCharCounts);
+    revealedCount = state.revealedLines;
+    caretOn = state.caretOn;
+    if (state.partialLineChars > 0 && state.revealedLines < ir.lines.length) {
+      partialLineIndex = state.revealedLines;
+      partialLineChars = state.partialLineChars;
+    }
+  } else if (layer.reveal?.mode === "line-stagger") {
+    const delaysSec = lineStaggerDelays(ir.lines.length, layer.reveal.each, layer.reveal.from);
+    const elapsedSeconds = frameLocal / fps;
+    staggerVisible = delaysSec.map((delay) => elapsedSeconds >= delay);
+  }
+
+  const focus = layer.focus ? focusState(layer.focus, frameLocal, fps) : null;
+  const dimOpacity = focus?.dimOpacity ?? 0.35;
+  const scrollPx = layer.scroll ? scrollOffsetPx(layer.scroll, frameLocal, fps, layout.lineHeightPx) : 0;
+  const addedFlags = layer.diff ? addedLineFlags(layer.diff, layer.code) : null;
+  const diffAlpha = layer.diff ? diffFadeAlpha(layer.diff, frameLocal, fps) : 0;
+  // --- end per-frame animation state ------------------------------------------------------------
 
   const contentTopPx = CHROME_TITLE_BAR_PX + CHROME_BORDER_PX + CHROME_PADDING_PX;
   const contentLeftPx = CHROME_BORDER_PX + CHROME_PADDING_PX + layout.gutterWidthPx;
@@ -432,21 +592,58 @@ export function renderCodeFrame(
   );
   ctx.clip();
 
-  for (let i = 0; i < revealedLineCount; i++) {
+  for (let i = 0; i < ir.lines.length; i++) {
+    const isPartial = i === partialLineIndex;
+    const isRevealed = staggerVisible ? (staggerVisible[i] ?? false) : i < revealedCount;
+    if (!isRevealed && !isPartial) continue;
+
     const line = ir.lines[i];
     const layoutLine = layout.lines[i];
     if (!line || !layoutLine) continue;
 
-    const dimmed = dimmedRange ? i + 1 < dimmedRange[0] || i + 1 > dimmedRange[1] : false;
     const rowCount = Math.max(1, layoutLine.rows.length);
+    const y = contentTopPx + layoutLine.y - scrollPx;
+
+    // Diff background tint (spec.md FR11) — a separate, uncached rect painted *underneath* the
+    // line's own bitmap, never folded into `lineKey` (Key Decision D6's `ctx.globalAlpha`
+    // pattern extended: baking a continuously-animated fade-in alpha into the per-line cache key
+    // would produce a near-unbounded number of near-duplicate bitmaps, defeating FR8's cache).
+    if (addedFlags?.[i] && diffAlpha > 0) {
+      ctx.save();
+      ctx.globalAlpha = diffAlpha;
+      ctx.fillStyle = layer.diff?.addedBg ?? DEFAULT_ADDED_BG;
+      ctx.fillRect(CHROME_BORDER_PX, y, layer.width - 2 * CHROME_BORDER_PX, rowCount * layout.lineHeightPx);
+      ctx.restore();
+    }
+
+    if (isPartial) {
+      // Typewriter's in-flight line: painted directly onto `ctx`, never through `lineCache`
+      // (spec.md FR8's "the one thing that is never cached, by design").
+      const truncated = truncateTokens(line.tokens, partialLineChars);
+      ctx.save();
+      ctx.translate(contentLeftPx, y);
+      paintLine(truncated, layoutLine, layout.fontSize, layout.lineHeightPx, 1)(ctx);
+      ctx.restore();
+
+      if (showLineNumbers) drawLineNumber(ctx, i + 1, y, layout.gutterWidthPx, layout.fontSize, colors.gutterText);
+
+      if (caretOn) {
+        const caret = caretPosition(layoutLine, layout.fontSize, partialLineChars);
+        const caretWidthPx = Math.max(1, layout.fontSize * 0.08);
+        ctx.fillStyle = colors.titleBarText;
+        ctx.fillRect(contentLeftPx + caret.x, y + caret.row * layout.lineHeightPx, caretWidthPx, layout.fontSize);
+      }
+      continue;
+    }
+
+    const dimmed = focus ? i + 1 < focus.range[0] || i + 1 > focus.range[1] : false;
     const key = lineKey(line.tokens, layout.fontSize, theme, dimmed, layout.contentWidthPx);
     const bitmap = lineCache.getOrRender(
       key,
       layout.contentWidthPx,
       rowCount * layout.lineHeightPx,
-      paintLine(line.tokens, layoutLine, layout.fontSize, layout.lineHeightPx, dimmed ? (layer.focus?.dimOpacity ?? 0.35) : 1),
+      paintLine(line.tokens, layoutLine, layout.fontSize, layout.lineHeightPx, dimmed ? dimOpacity : 1),
     );
-    const y = contentTopPx + layoutLine.y - scrollOffsetPx;
     ctx.drawImage(bitmap, contentLeftPx, y);
 
     if (showLineNumbers) {
@@ -454,12 +651,29 @@ export function renderCodeFrame(
     }
   }
 
-  ctx.restore();
+  // Annotations (spec.md FR12) — drawn directly, uncached, inside the same clip region as the
+  // lines above (their `x` can land past the longest line for `side: "right"`, still within the
+  // clip's box-minus-border width). `annotate.ts`'s `annotationPosition` throws for an
+  // out-of-range `annotation.line` (its own doc comment: that should already be a compile-time
+  // `diagnostics.ts` diagnostic blocking this call entirely) — a defensive bounds check here
+  // means a caller that renders past a diagnostic it should have stopped on still doesn't crash
+  // the paint loop over one bad annotation.
+  for (const annotation of layer.annotations ?? []) {
+    if (annotation.line < 1 || annotation.line > layout.lines.length) continue;
+    if (frameLocal / fps < (annotation.delay ?? 0)) continue;
+    const pos = annotationPosition(annotation, layout);
+    paintAnnotationMarker(
+      ctx,
+      annotation,
+      contentLeftPx + pos.x,
+      contentTopPx + pos.y - scrollPx,
+      layout.lineHeightPx,
+      layout.fontSize,
+      colors,
+    );
+  }
 
-  // Annotations (spec.md FR12) are `annotate.ts`'s job (not built yet) — intentionally not
-  // drawn here; `layer.annotations`' out-of-range validation is already `diagnostics.ts`'s
-  // concern, independent of this file's rendering.
-  void layer.annotations;
+  ctx.restore();
 }
 
 // Lazily-created default cache pair for `paintCodeLayer`'s own `PainterFn`-shaped call site
@@ -481,7 +695,8 @@ function defaultChromeCache(): ChromeCache {
 }
 
 /**
- * The function a later task registers via `registerPainter("code", paintCodeLayer)`
+ * The function `index.ts` registers via `registerPainter("code", paintCodeLayer)` (T11's own
+ * side effect, run at module load)
  * (`packages/renderer-canvas/src/painters.ts`'s `PainterFn` shape:
  * `(entry: unknown, timelineLayer: TimelineLayer, frame: number, ctx: SKRSContext2D) => void`)
  * — already conformant here so that registration is a pure wiring step with no signature
