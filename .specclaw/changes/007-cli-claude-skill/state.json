@@ -1,0 +1,11 @@
+{
+  "change": "007-cli-claude-skill",
+  "phase": "build",
+  "branch": "specclaw/007-cli-claude-skill",
+  "phases": {
+    "spec": {"status":"done","at":"2026-09-07T11:22:34Z"},
+    "design": {"status":"done","at":"2026-09-07T11:23:31Z"},
+    "tasks": {"status":"done","at":"2026-09-07T11:25:15Z"},
+    "build": {"status":"failed","at":"2026-09-07T12:32:43Z","tasks":{"done":21,"total":21,"failed":0}}
+  }
+}
