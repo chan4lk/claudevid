@@ -6,11 +6,15 @@
 // against the documented `<15/<10/<5`min targets SCALED to the reference spec's own (short)
 // duration (design.md's `report()` description).
 //
-// Invoked directly — `pnpm --filter @claudevid/bench bench` (design.md D7) — never through a
-// `claudevid` CLI subcommand, which doesn't exist in this repo yet (that's change 007's job).
+// Invoked directly — `pnpm --filter @claudevid/bench bench` (design.md D7) — or imported as a
+// library and called via its exported `runBench(argv)` (change 007's `packages/cli/src/commands/
+// bench.ts`). The self-invoking `main()` below is gated on this module being the actual entry
+// script (`isDirectRun`), not merely imported — otherwise every `claudevid <anything>` invocation
+// would also run a real bench pass as a side effect of statically importing `@claudevid/bench`.
 
 import { performance } from "node:perf_hooks";
 import * as path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { compileTimeline } from "@claudevid/core";
 import { createRenderer, createFrameBuffer } from "@claudevid/renderer-canvas";
@@ -136,7 +140,12 @@ async function main(): Promise<void> {
   await runBench(process.argv.slice(2));
 }
 
-main().catch((err) => {
-  console.error(err instanceof ArgError ? `bench: ${err.message}` : err);
-  process.exitCode = 1;
-});
+const isDirectRun =
+  process.argv[1] !== undefined && fileURLToPath(import.meta.url) === path.resolve(process.argv[1]);
+
+if (isDirectRun) {
+  main().catch((err) => {
+    console.error(err instanceof ArgError ? `bench: ${err.message}` : err);
+    process.exitCode = 1;
+  });
+}

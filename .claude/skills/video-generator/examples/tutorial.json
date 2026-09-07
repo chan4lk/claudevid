@@ -1,0 +1,95 @@
+{
+  "version": 1,
+  "width": 1920,
+  "height": 1080,
+  "fps": 30,
+  "background": "#0b0f17",
+  "meta": {
+    "title": "How Claude Generates Video",
+    "description": "Longer-form worked example: a four-scene tutorial with narration and scene transitions."
+  },
+  "scenes": [
+    {
+      "id": "intro",
+      "duration": 4,
+      "narration": "Today we're going to look at how Claude generates a video from a single prompt.",
+      "layers": [
+        {
+          "type": "text",
+          "text": "How Claude Generates Video",
+          "x": "center",
+          "y": "center",
+          "fontSize": 80,
+          "fontWeight": 700,
+          "color": "#ffffff",
+          "align": "center",
+          "animation": { "enter": "fade-up", "duration": 0.6 }
+        }
+      ]
+    },
+    {
+      "id": "the-problem",
+      "duration": 5,
+      "transition": { "kind": "cross-fade", "duration": 0.5 },
+      "narration": "Writing motion graphics code by hand is slow, so instead Claude writes a structured JSON spec.",
+      "layers": [
+        {
+          "type": "text",
+          "text": "Motion graphics code is slow to write by hand",
+          "x": "center",
+          "y": 420,
+          "fontSize": 56,
+          "color": "#f5f5f5",
+          "align": "center",
+          "maxWidth": 1400,
+          "animation": { "enter": "fade-up", "duration": 0.5 }
+        },
+        {
+          "type": "rect",
+          "x": "center",
+          "y": 600,
+          "width": 800,
+          "height": 6,
+          "fill": "#4f8cff"
+        }
+      ]
+    },
+    {
+      "id": "the-solution",
+      "duration": 6,
+      "transition": { "kind": "cross-fade", "duration": 0.5 },
+      "narration": "Claude outputs a VideoSpec, and claudevid compiles it into a timeline, renders every frame, and encodes an MP4.",
+      "layers": [
+        {
+          "type": "text",
+          "text": "Prompt -> VideoSpec -> Timeline -> MP4",
+          "x": "center",
+          "y": "center",
+          "fontSize": 64,
+          "fontWeight": 600,
+          "color": "#ffffff",
+          "align": "center",
+          "animation": { "enter": "fade", "duration": 0.5 }
+        }
+      ]
+    },
+    {
+      "id": "outro",
+      "duration": 3,
+      "transition": { "kind": "cut" },
+      "narration": "That's the whole loop: structured JSON in, a polished video out.",
+      "layers": [
+        {
+          "type": "text",
+          "text": "Structured JSON in. Polished video out.",
+          "x": "center",
+          "y": "center",
+          "fontSize": 60,
+          "color": "#ffffff",
+          "align": "center",
+          "animation": { "enter": "fade-up", "duration": 0.5 }
+        }
+      ]
+    }
+  ]
+}
