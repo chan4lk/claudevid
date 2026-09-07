@@ -26,3 +26,12 @@ export { applyLexicon, resolveLexiconDigest } from "./lexicon.js";
 export type { Lexicon, LexiconEntry } from "./lexicon.js";
 export { buildAudioGraphArgv, resolveFfmpegCapabilities, AudioGraphValidationError } from "./graph.js";
 export type { AudioTrack, AudioGraphOptions } from "./graph.js";
+export {
+  muxOutput,
+  probeDurationSeconds,
+  MuxError,
+  MuxOutputExistsError,
+  MuxSamePathError,
+  MuxDurationMismatchError,
+} from "./mux.js";
+export type { MuxOptions } from "./mux.js";
