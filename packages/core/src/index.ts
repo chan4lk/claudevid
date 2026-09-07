@@ -30,6 +30,7 @@ export type { EasingFn, StepDirection } from "./easing.js";
 export type {
   VideoSpec,
   Scene,
+  SceneTransition,
   Layer,
   TextLayer,
   RectLayer,
@@ -39,4 +40,5 @@ export type {
   Animation,
   Meta,
   AudioTrack,
+  PropertyBag,
 } from "./types.js";

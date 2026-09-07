@@ -8,6 +8,13 @@ export interface Animation {
   duration?: number;
   delay?: number;
   easing?: string;
+  /** Interpreted by `@claudevid/motion` (change 003): only meaningful on a `GroupLayer` —
+   * clones the group's resolved enter/exit tracks per child with a `delay` offset of
+   * `each * orderIndex`. Inert (schema-legal, semantically a no-op) elsewhere. */
+  stagger?: {
+    each: number;
+    from?: "first" | "center" | "last" | "random";
+  };
 }
 
 const coordinateSchema = z.union([
@@ -16,12 +23,18 @@ const coordinateSchema = z.union([
   z.string().regex(/^-?\d+(\.\d+)?%$/, 'expected a percentage string like "50%"'),
 ]) as z.ZodType<Coordinate>;
 
+const staggerSchema = z.object({
+  each: z.number().positive(),
+  from: z.enum(["first", "center", "last", "random"]).optional(),
+});
+
 const animationSchema: z.ZodType<Animation> = z.object({
   enter: z.string().optional(),
   exit: z.string().optional(),
   duration: z.number().min(0).optional(),
   delay: z.number().min(0).optional(),
   easing: z.string().optional(),
+  stagger: staggerSchema.optional(),
 });
 
 const baseLayerShape = {
