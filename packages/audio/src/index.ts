@@ -5,6 +5,7 @@
 // live-model integration test (T8) remains outside this package's public surface.
 
 export type { SynthesisRequest, CachedSynthesis, AudioDurationsOptions } from "./types.js";
+export type { WordTiming, AlignRequest, AlignResult } from "./word-timing-types.js";
 export { resolveCacheRoot, resolveCacheSubdir } from "./cache-root.js";
 export { synthesize } from "./tts.js";
 export type { PinnedModel } from "./models.js";
