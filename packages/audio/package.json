@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "@claudevid/core": "workspace:*",
+    "@huggingface/transformers": "^3.8.1",
     "kokoro-js": "^1.2.0",
     "onnxruntime-node": "^1.19.0"
   },

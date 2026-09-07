@@ -2,10 +2,14 @@
 // "model digest mismatch on load from cache ... fails closed per FR6, never silently re-fetches").
 //
 // Deliberate scope boundary: this module owns the URL+digest pin, the one-shot download+verify
-// (`installModels`), and the re-verify-on-every-load check (`verifyInstalledModel`). It does NOT
-// wire itself into `tts.ts`'s model loading — that integration is explicitly deferred (see the
-// "Model resolution note (T4 follow-up)" comment at the top of tts.ts). This file only builds the
-// pinning/verification machinery.
+// (`installModels`), and the re-verify-on-every-load check (`verifyInstalledModel`) — real,
+// tested, single-file digest verification primitives. `tts.ts` imports `PINNED_MODEL.id` from
+// here as its single source of truth for which model to load, and routes its cache directory
+// through this package's shared cache root (design.md D2) — but it loads that model via
+// `@huggingface/transformers`'s own multi-file hub client (config/tokenizer/ONNX shards), which
+// has no single byte sequence to check against `PINNED_MODEL.digest`. `installModels`/
+// `verifyInstalledModel` below apply to an explicit single-file fetch scenario, not to Kokoro's
+// own resolver (see the "Scope boundary" comment at the top of tts.ts).
 //
 // Network access is confined to `installModels()` alone (spec.md FR6's "no network access
 // outside the explicit install command") — `verifyInstalledModel` and every helper below it only

@@ -59,9 +59,11 @@ try {
       text: SAMPLE_TEXT,
       voice: "af_heart", // kokoro-js README's own example voice id — a real, always-available voice.
       speed: 1,
-      // modelId/modelDigest are currently unused by tts.ts (see its T4-follow-up note) but are
-      // still required fields of SynthesisRequest (FR3) — pass the real pinned values so this
-      // call is what production code will eventually send once models.ts is wired in.
+      // modelDigest is not independently verified per-request by tts.ts (see its Scope boundary
+      // comment: Kokoro's multi-file hub cache has no single byte sequence to check against a
+      // pinned digest) but is still a required field of SynthesisRequest (FR3) — pass the real
+      // pinned values. modelId IS the actual model tts.ts loads (PINNED_MODEL.id, single source
+      // of truth, no separate DEFAULT_MODEL_ID constant).
       modelId: PINNED_MODEL.id,
       modelDigest: PINNED_MODEL.digest,
     }),

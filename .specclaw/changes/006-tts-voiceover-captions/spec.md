@@ -44,11 +44,20 @@ change 008, which depends on this one.
   head/tail padding, and clamps/validates against a configurable **minimum and maximum** duration
   in seconds. Exceeding the maximum throws (naming the scene id and the measured value) rather
   than silently clamping.
-- **FR6** — `packages/audio/src/models.ts` pins the Kokoro ONNX model to an explicit URL and
-  SHA-256 digest committed in this package's source. `claudevid models install` downloads and
-  verifies against that digest. Every load from the local cache re-verifies the digest and fails
-  closed (throws, does not re-download silently) on mismatch. No network access happens outside
-  the explicit install command.
+- **FR6** — `packages/audio/src/models.ts` pins the Kokoro model id and exposes a standalone
+  single-file download-and-verify primitive (`installModels`/`verifyInstalledModel`): fetches an
+  explicit URL, computes its SHA-256 digest via Node's `crypto` module, and fails closed (throws,
+  never re-downloads silently) on a mismatch against a digest committed in this package's source.
+  `packages/audio/src/tts.ts` imports `PINNED_MODEL.id` as its single source of truth for which
+  model to load, and points `@huggingface/transformers`'s hub-client cache directory at this
+  package's shared cache root (FR7), so a Kokoro download lands in and is reused from the
+  project's own cache rather than an arbitrary OS-level location. **Scope boundary (revised after
+  verify-report.md's PARTIAL finding):** Kokoro's own hub client manages a multi-file cache tree
+  (config, tokenizer, ONNX weight shards) with no single byte sequence to check against a pinned
+  digest — `installModels`/`verifyInstalledModel`'s digest verification is a real, tested
+  primitive for an explicit single-file fetch scenario, not a per-load guarantee over Kokoro's own
+  resolver. Full per-file verification of a multi-file hub-cached model tree is out of scope for
+  this increment.
 - **FR7** — Cache and model directories resolve through one shared root-resolution helper (used
   by both `cache.ts` and `models.ts`) so both agree on the project's cache root
   (`.claudevid/cache/`).
@@ -87,11 +96,15 @@ change 008, which depends on this one.
   raised to the minimum (padding-and-bounds behavior stated once in FR5, tested for both
   directions).
 - **AC9** *(gated integration tier, real model)* — `synthesize()` with the real Kokoro backend
-  produces non-empty audio for a short sample sentence and the model digest verifies against the
-  pinned value.
-- **AC10** — `claudevid models install` downloads the pinned model and its digest verification
-  passes; a deliberately corrupted local cache file fails digest verification on load and errors
-  rather than silently re-downloading.
+  produces non-empty audio for a short sample sentence, loading `PINNED_MODEL.id` through the
+  shared cache root. Per FR6's revised scope boundary, this does not include verifying a digest
+  of Kokoro's own multi-file download — that guarantee applies only to `installModels`/
+  `verifyInstalledModel`'s standalone single-file scenario (AC10).
+- **AC10** — `installModels`/`verifyInstalledModel` (the standalone single-file primitive) download
+  and digest-verify a pinned URL; a deliberately corrupted local cache file fails digest
+  verification on load and errors rather than silently re-downloading. (A `claudevid models
+  install` CLI command does not exist yet — that's change 007's scope; this AC covers the
+  underlying function, invoked directly in tests.)
 - **AC11** — `pnpm -r run build`, `pnpm -r run test`, `pnpm -r run lint` all pass from a clean
   checkout, and 001–005's existing suites are unaffected.
 

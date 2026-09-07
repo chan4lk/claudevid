@@ -156,9 +156,17 @@ export interface AudioDurationsOptions {
 - **D4 — Narration is structural (`NarrationBlock`), never a bare string internally.** A bare
   string is accepted at the schema boundary and normalized once. Resolves the schema-door
   problem party-visionary raised for future multi-speaker/per-block voice support.
-- **D5 — Model pinning replaces "download with integrity check against a self-served hash."**
-  URL + SHA-256 digest committed in-repo; every cache load re-verifies; network access confined
-  to an explicit `install` command. Resolves party-security's root-of-trust WARN.
+- **D5 — Model pinning replaces "download with integrity check against a self-served hash,"**
+  revised after verify-report.md's PARTIAL finding that `tts.ts` originally bypassed this
+  entirely. `PINNED_MODEL.id` (models.ts) is `tts.ts`'s single source of truth for which model to
+  load, and `tts.ts` points `@huggingface/transformers`'s hub-client cache dir at this package's
+  shared cache root (D2), so Kokoro's own download lands in and is reused from one place. Digest
+  verification (`installModels`/`verifyInstalledModel`) remains a real, tested primitive for an
+  explicit single-file fetch — it does not run against Kokoro's own multi-file hub-cached
+  download, which has no single byte sequence to check against a pinned digest. Resolves
+  party-security's root-of-trust WARN for the "which model, cached where" question; per-file
+  integrity verification of a multi-file hub cache tree remains open (see spec.md FR6's scope
+  boundary).
 - **D6 — Fail-closed everywhere, no new fallback paths.** `MissingAudioDurationError` (already
   in core) covers the absent-map case; digest mismatch throws rather than re-fetching; exceeding
   max duration throws rather than clamping. No new "guess and continue" path is introduced by

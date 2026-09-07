@@ -5,29 +5,29 @@
 // every test except the gated live-model integration test (AC9, a later task's tts.live.test.ts)
 // substitutes a fixture instead of loading Kokoro at all.
 //
-// Model resolution note (T4 follow-up): `request.modelId`/`request.modelDigest` are NOT wired to
-// real model loading/verification here — that pinning/verification is FR6, owned by a later
-// task's `models.ts`. For now this module always loads kokoro-js's own recommended default model
-// via `KokoroTTS.from_pretrained`, ignoring those two fields entirely. `models.ts` will replace
-// `DEFAULT_MODEL_ID` below with a call into its pinned-and-verified model path as a follow-up
-// integration step.
+// Model resolution (spec.md FR6, design.md D2/D5): the model id loaded here is `models.ts`'s
+// `PINNED_MODEL.id` — the single committed source of truth for "which model" — and the
+// underlying `@huggingface/transformers` runtime's cache directory is pointed at this package's
+// shared cache root (`resolveCacheSubdir("models")`, the same helper `models.ts` uses), so a
+// Kokoro download lands in the project's own cache, not an arbitrary OS-level HF cache, and is
+// reused (no re-download) on every subsequent call — this is what makes D2's "one cache root"
+// hold for Kokoro's own downloads too, not just `models.ts`'s standalone install/verify path.
 //
-// Output format note: `synthesize()` returns raw **16-bit signed PCM, little-endian, mono, no
-// WAV/header framing** in `audio`, alongside the actual `sampleRate` Kokoro produced. This
-// (rather than a self-describing WAV buffer) is a deliberate, non-obvious convention: it keeps
-// the cache entry (FR4) and duration measurement (a later step, per design.md's diagram) both
-// reducible to `audio.length / 2 / sampleRate` seconds — a plain byte-length arithmetic, no
-// header to parse or strip first. Any later code that writes these bytes to disk as a `.wav` (or
-// feeds them to FFmpeg) must add its own WAV header / tell FFmpeg the raw format explicitly.
+// Scope boundary, stated plainly: `@huggingface/transformers`'s own hub client manages a
+// multi-file cache tree (config, tokenizer, ONNX weight shards) for a model id, which has no
+// single byte sequence to check against `PINNED_MODEL.digest`. `models.ts`'s `installModels`/
+// `verifyInstalledModel` remain real, tested, single-file digest verification primitives, but
+// this module does not (and cannot, without replacing transformers.js's hub client) call them
+// per-load against Kokoro's own multi-file download. Digest-verified installation as tested in
+// models.test.ts applies to an explicit single-file fetch scenario, not to Kokoro's own resolver.
 
+import { env } from "@huggingface/transformers";
 import { KokoroTTS } from "kokoro-js";
+import * as path from "node:path";
 
+import { resolveCacheSubdir } from "./cache-root.js";
+import { PINNED_MODEL } from "./models.js";
 import type { SynthesisRequest } from "./types.js";
-
-/** kokoro-js's own documented recommended model id (see node_modules/kokoro-js/README.md's
- * usage example) — used as-is until `models.ts` (FR6) supplants this with the pinned,
- * digest-verified local model path. */
-const DEFAULT_MODEL_ID = "onnx-community/Kokoro-82M-v1.0-ONNX";
 
 /** Module-level lazy singleton (design.md's Risks section: isolate the native-runtime seam so
  * nothing outside this module ever needs a working `onnxruntime-node` build). Loaded at most
@@ -37,9 +37,12 @@ let kokoroPromise: Promise<KokoroTTS> | null = null;
 
 function loadKokoro(): Promise<KokoroTTS> {
   if (!kokoroPromise) {
+    // Route `@huggingface/transformers`'s hub client through this package's shared cache root
+    // (design.md D2) instead of its own default `./.cache` — set once, before the first load.
+    env.cacheDir = resolveCacheSubdir("models") + path.sep;
     // `device: "cpu"` — this package runs under `onnxruntime-node`, not a browser, so neither
     // "wasm" nor "webgpu" (kokoro-js's other two device options) applies.
-    kokoroPromise = KokoroTTS.from_pretrained(DEFAULT_MODEL_ID, { dtype: "fp32", device: "cpu" });
+    kokoroPromise = KokoroTTS.from_pretrained(PINNED_MODEL.id, { dtype: "fp32", device: "cpu" });
   }
   return kokoroPromise;
 }
