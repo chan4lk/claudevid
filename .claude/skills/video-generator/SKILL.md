@@ -12,9 +12,19 @@ entirely by the pipeline.
 
 ## Prerequisite
 
-Run `pnpm build` once at the repo root before using `scripts/validate.ts` or `scripts/render.ts`.
-Those scripts shell out to `packages/cli/dist/cli.js`, which only exists after a build — they are
-thin wrappers, not a reimplementation of validate/render logic.
+`scripts/validate.mts` and `scripts/render.mts` are thin wrappers — they shell out to the
+claudevid CLI rather than reimplementing validate/render logic — so the CLI has to be reachable
+first. They locate it in one of two ways, in this order:
+
+1. **Installed as a dependency** (a consumer project): `claudevid` resolved from `node_modules`.
+   Install it with `npm install claudevid`.
+2. **Inside the claudevid monorepo**: `packages/cli/dist/cli.js`, which exists only after
+   `pnpm build` at the repo root.
+
+If neither is present the wrapper fails with a message naming both options.
+
+Rendering also needs **FFmpeg on `PATH`**, and a spec containing `narration` downloads the Kokoro
+TTS model (~330 MB) on first use. Specs without narration need neither a model nor network.
 
 ## Schema
 
@@ -38,12 +48,13 @@ for field names, types, and constraints when authoring a spec.
 ## Validating and rendering
 
 Both scripts are plain Node ESM scripts (no build step of their own needed) — the workspace
-requires Node >=22 (see the repo root `package.json` `engines` field), which runs `.ts` files
-directly:
+requires Node >=22, which runs TypeScript directly. The `.mts` extension is deliberate: it marks
+these as ESM regardless of the host project's `package.json` `type` field, so they work both in
+this repo and in a consumer project installed from the published package:
 
 ```bash
-node scripts/validate.ts <spec-file>
-node scripts/render.ts <spec-file> --out <output.mp4>
+node scripts/validate.mts <spec-file>
+node scripts/render.mts <spec-file> --out <output.mp4>
 ```
 
 Each script forwards its argv verbatim to the built CLI's `validate`/`render` command and exits

@@ -10,7 +10,7 @@
 import * as path from "node:path";
 import * as fs from "node:fs/promises";
 
-import type { VideoSpec, Layer, SceneWindow, Timeline } from "@claudevid/core";
+import type { VideoSpec, Layer, SceneWindow, Timeline, Diagnostic } from "@claudevid/core";
 import { compileTimeline } from "@claudevid/core";
 import {
   synthesize,
@@ -23,7 +23,19 @@ import {
   type AudioTrack,
 } from "@claudevid/audio";
 import { probe, createEncodePipe, createTempRun } from "@claudevid/encoder-ffmpeg";
-import { createRenderer, createFrameBuffer } from "@claudevid/renderer-canvas";
+import { createRenderer, createFrameBuffer, registerPainter } from "@claudevid/renderer-canvas";
+import { compileMotion, createResolver } from "@claudevid/motion";
+import {
+  compileCodeLayers,
+  layoutCode,
+  checkLayoutDiagnostics,
+  renderCodeFrame,
+  createLineCache,
+  createChromeCache,
+  isCodeLayer,
+  type CodeLayer,
+  type CompiledCodeLayer,
+} from "@claudevid/layer-code";
 
 type Scene = VideoSpec["scenes"][number];
 type NarrationBlock = NonNullable<Scene["narration"]>[number];
@@ -244,6 +256,75 @@ async function assembleVoiceTrack(
   return wavPath;
 }
 
+/** Steps B2/F0 — compiles every `code` layer in `timeline` and re-registers the `"code"` painter
+ * so it draws from those compiled entries.
+ *
+ * `@claudevid/layer-code` registers `paintCodeLayer` at import time, and that function reads its
+ * `entry` argument as an already-assembled `CompiledCodeLayer`. `renderer-canvas`'s painter
+ * dispatch, though, hands a painter the raw `timelineLayer.layer` as `entry` — it has no channel
+ * for a compiled entry at all (painters.ts: "the registered closure captures whatever internal
+ * lookup it needs itself"). This function is that closure: the integrating pipeline owns the
+ * `layerKey -> CompiledCodeLayer` map, and the line/chrome caches live for the whole render.
+ *
+ * `compileCodeLayers` already runs `layoutCode`/`checkLayoutDiagnostics` internally for its
+ * diagnostics but returns only the token IR, so the per-layer layout is recomputed here with the
+ * same inputs (both calls are pure) to assemble `{ ir, layout, blocked }`.
+ */
+async function prepareCodeLayers(spec: VideoSpec, timeline: Timeline): Promise<Diagnostic[]> {
+  const { compiled: irByLayerKey, diagnostics } = await compileCodeLayers(spec, timeline);
+
+  const compiledByLayerKey = new Map<string, CompiledCodeLayer>();
+  for (const tl of timeline.layers) {
+    if (!isCodeLayer(tl.layer)) continue;
+    const ir = irByLayerKey.get(tl.layerKey);
+    if (!ir) continue; // unsupported lang/theme — already diagnosed, layer paints nothing
+    const layer = tl.layer as unknown as CodeLayer;
+    const layout = layoutCode(layer.code.split("\n"), {
+      width: layer.width,
+      height: layer.height,
+      fontSize: layer.fontSize,
+      tabSize: layer.tabSize,
+      wrap: layer.wrap,
+      showLineNumbers: layer.showLineNumbers,
+    });
+    const { blocked } = checkLayoutDiagnostics(tl.layerKey, layout, {
+      maxLines: layer.maxLines,
+      hasScroll: Boolean(layer.scroll),
+      focus: layer.focus,
+      scroll: layer.scroll,
+      annotations: layer.annotations,
+    });
+    compiledByLayerKey.set(tl.layerKey, { ir, layout, blocked });
+  }
+
+  const lineCache = createLineCache();
+  const chromeCache = createChromeCache();
+  registerPainter("code", (_entry, timelineLayer, frame, ctx) => {
+    const compiled = compiledByLayerKey.get(timelineLayer.layerKey);
+    if (!compiled) return;
+    renderCodeFrame(
+      compiled,
+      timelineLayer.layer as unknown as CodeLayer,
+      lineCache,
+      chromeCache,
+      ctx,
+      frame - timelineLayer.startFrame,
+    );
+  });
+
+  return diagnostics;
+}
+
+/** Compile-time diagnostics from motion/code compilation are advisory here (change 003's
+ * `compileMotion` contract: "diagnosed, not silently ignored") — printed once, never fatal. The
+ * fail-closed half is `renderCodeFrame`'s own `CodeOverflowError` for a `blocked` entry. */
+function reportDiagnostics(label: string, diagnostics: Diagnostic[]): void {
+  for (const diagnostic of diagnostics) {
+    const suggestion = diagnostic.suggestion ? ` — ${diagnostic.suggestion}` : "";
+    console.warn(`${label} ${diagnostic.path}: ${diagnostic.message}${suggestion}`);
+  }
+}
+
 /** Shared render pipeline (spec.md FR9, design.md D1/D2): synthesizes narration, compiles the
  * timeline, optionally inserts forced-aligned captions layers, renders every frame through the
  * encoder, and (if any scene has narration) muxes the assembled voice track against the silent
@@ -264,13 +345,21 @@ export async function runRenderPipeline(spec: VideoSpec, opts: RenderPipelineOpt
 
   // Step B + C
   const audioDurations = computeAudioDurationsRecord(spec, narrationBySceneId);
+  let renderSpec = spec;
   let timeline = compileTimeline(spec, { audioDurations });
 
   // Step E (only if captions requested and something is actually narrated)
   if (opts.captions && hasNarration) {
-    const workingSpec = await insertCaptionsLayers(spec, timeline, narrationBySceneId, alignFn);
-    timeline = compileTimeline(workingSpec, { audioDurations });
+    renderSpec = await insertCaptionsLayers(spec, timeline, narrationBySceneId, alignFn);
+    timeline = compileTimeline(renderSpec, { audioDurations });
   }
+
+  // Step B2 — motion (change 003) and `code`-layer (change 004) compilation. Both are keyed on
+  // `timeline.layers`' `layerKey`s, so both run after the timeline above is final.
+  const { compiled: motionTracks, diagnostics: motionDiagnostics } = compileMotion(renderSpec, timeline);
+  reportDiagnostics("motion:", motionDiagnostics);
+  const motion = createResolver(motionTracks, timeline);
+  reportDiagnostics("code:", await prepareCodeLayers(renderSpec, timeline));
 
   // Step F setup (mirrors tools/bench/src/bench.ts's renderer/tempRun lifecycle)
   const capabilities = await probeFn();
@@ -294,7 +383,12 @@ export async function runRenderPipeline(spec: VideoSpec, opts: RenderPipelineOpt
     });
 
     for (let frame = 0; frame < timeline.frameCount; frame++) {
-      await renderer.renderFrame(timeline, frame, frameBuffer, opts.scale !== undefined ? { scale: opts.scale } : {});
+      await renderer.renderFrame(
+        timeline,
+        frame,
+        frameBuffer,
+        opts.scale !== undefined ? { scale: opts.scale, motion } : { motion },
+      );
       await pipe.write(frameBuffer.data);
     }
     await pipe.finish();
