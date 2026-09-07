@@ -174,7 +174,17 @@ ANSI/terminal layer folds in here or becomes change 008.
 **Depends on:** 001, 002. **Panel: CHANGES_REQUESTED — 6 BLOCK, 8 WARN, 3 NOTE**
 See `.specclaw/changes/005-videotoolbox-encoder/party-report.md`.
 
-### Resolve before building (BLOCK findings)
+**Scope decision (resolves the BLOCK findings):** adopted party-po's own BLOCK-severity fix —
+v1 ships `probe`/`argv`/`pipe`/`profiles` (preview+final only)/`temp`/`tools/bench`, single-pipe
+only. `chunk.ts`/`pool.ts`/`concat.ts`/`cache.ts` (parallel chunk rendering + resume) are cut
+entirely from this change and deferred to a follow-on, gated on `tools/bench`'s real 30-minute
+Apple Silicon number failing to clear the <15min primary target — this single cut moots the
+cache-key, temp/cache lifecycle, and CLI-scope BLOCK findings by removing the scope that caused
+them. See `.specclaw/changes/005-videotoolbox-encoder/spec.md` for the full resolution of all 8
+surviving points (argv single-owner, quality gate, progress contract, probe test seam, CI cost,
+non-macOS fallback, resume/pool-sizing explicitly marked moot).
+
+### Resolve before building (BLOCK findings) — historical, see scope decision above
 - [ ] **Bench the single-pipe path first.** `chunk/pool/concat/cache` — half the change, and the
       highest-risk half — is priced only against the <5 min aggressive target. Measure the
       corrected single-pipe encoder against the primary <15 min target before building it.
