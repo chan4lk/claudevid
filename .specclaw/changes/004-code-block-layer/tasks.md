@@ -115,7 +115,7 @@ additive `renderer-canvas` files in Wave 3.
 
 ### Wave 4 — Animations, diff, annotate
 
-- [ ] `T8` — `diff.ts`: pure LCS line diff
+- [x] `T8` — `diff.ts`: pure LCS line diff
   - Files: `packages/layer-code/src/diff.ts`
   - Estimate: medium
   - Kind: impl
@@ -124,7 +124,7 @@ additive `renderer-canvas` files in Wave 3.
     third-party diff library. `{before, after}` pair is v1's only supported diff input (spec.md
     Open Question #2's resolution) — no unified-diff-string parsing in this task.
 
-- [ ] `T9` — `animations.ts`: typewriter / line-stagger / focus / scroll, all pure
+- [x] `T9` — `animations.ts`: typewriter / line-stagger / focus / scroll, all pure
   - Files: `packages/layer-code/src/animations.ts`
   - Estimate: large
   - Kind: impl
@@ -135,7 +135,7 @@ additive `renderer-canvas` files in Wave 3.
     directly). All four functions: plain numeric/array in, plain data out — zero canvas, zero
     Shiki (design.md Key Decision D2 — no `Track`/`PropertyBag`/`Channel` involvement at all).
 
-- [ ] `T10` — `annotate.ts`: line-anchored callout positioning
+- [x] `T10` — `annotate.ts`: line-anchored callout positioning
   - Files: `packages/layer-code/src/annotate.ts`
   - Estimate: small
   - Kind: impl
@@ -144,7 +144,7 @@ additive `renderer-canvas` files in Wave 3.
     .ts`'s own per-line offset table (spec.md FR12 — one source of truth, no re-derived
     arithmetic). Out-of-range `annotations[].line` is T5's job (diagnostic), not this task's.
 
-- [ ] `T11` — Wire `animations.ts`/`diff.ts`/`annotate.ts` into `paintCodeLayer`
+- [x] `T11` — Wire `animations.ts`/`diff.ts`/`annotate.ts` into `paintCodeLayer`
   - Files: `packages/layer-code/src/render.ts` (extend), `packages/layer-code/src/index.ts`
     (finalize exports + `registerPainter("code", paintCodeLayer)` side effect)
   - Estimate: large
@@ -161,7 +161,7 @@ additive `renderer-canvas` files in Wave 3.
 
 ### Wave 5 — Tests + full-workspace regression
 
-- [ ] `T12` — Compile-time pipeline tests (highlight/layout/diagnostics)
+- [x] `T12` — Compile-time pipeline tests (highlight/layout/diagnostics)
   - Files: `packages/layer-code/test/schema.test.ts`, `highlight.test.ts`, `layout.test.ts`,
     `diagnostics.test.ts`, `themes.test.ts`, `no-shiki-outside-highlight.test.ts`
   - Estimate: large
@@ -174,7 +174,7 @@ additive `renderer-canvas` files in Wave 3.
     import and fails the test if found (spec.md NFR2 — a hard constraint, mirrors `003`'s own
     NFR1 canvas-import grep for `packages/motion/test/`).
 
-- [ ] `T13` — Render/cache tests
+- [x] `T13` — Render/cache tests
   - Files: `packages/layer-code/test/render-cache.test.ts`, `diff.test.ts`, `focus.test.ts`,
     `annotate.test.ts`
   - Estimate: large
@@ -186,7 +186,7 @@ additive `renderer-canvas` files in Wave 3.
     dim, raw-pixel luminance comparison, not a snapshot image), AC11 (annotation position vs.
     `layout.ts`'s own offsets).
 
-- [ ] `T14` — End-to-end integration test + `renderer-canvas` painter-registry test
+- [x] `T14` — End-to-end integration test + `renderer-canvas` painter-registry test
   - Files: `packages/layer-code/test/integration.test.ts`,
     `packages/renderer-canvas/test/painters.test.ts`
   - Estimate: medium
@@ -199,7 +199,7 @@ additive `renderer-canvas` files in Wave 3.
     round-trip, and an unregistered type still falls through to `continue` with no error
     (regression safety for `002`/`003`'s existing dispatch behavior).
 
-- [ ] `T15` — Workspace-wide build/test/lint pass
+- [x] `T15` — Workspace-wide build/test/lint pass
   - Files: none (verification task)
   - Estimate: small
   - Kind: test
