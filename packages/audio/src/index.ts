@@ -35,3 +35,4 @@ export {
   MuxDurationMismatchError,
 } from "./mux.js";
 export type { MuxOptions } from "./mux.js";
+export { exportSrt, exportVtt } from "./export.js";
