@@ -1,7 +1,7 @@
 # 🦞 SpecClaw Dashboard
 
 **Project:** claudevid
-**Last Updated:** 2026-09-07 08:56 UTC
+**Last Updated:** 2026-09-07 09:50 UTC
 
 ## Active Changes
 
@@ -12,7 +12,7 @@
 - 🔨 **004-code-block-layer** — build in-progress | 15/15 tasks (100%) | 0 failed | PR #6 merged
 - 🔍 **005-videotoolbox-encoder** — verify PASS | 11/11 tasks (100%) | 0 failed | PR #7 merged
 - 🔍 **006-tts-voiceover-captions** — verify PASS | 8/8 tasks (100%) | 0 failed | PR #8 merged
-- 📝 **008-forced-alignment-captions-audio-graph** — tasks done | 0/10 tasks (0%) | 0 failed
+- 🔍 **008-forced-alignment-captions-audio-graph** — verify PASS | 10/10 tasks (100%) | 0 failed
 
 ## Pending Proposals
 

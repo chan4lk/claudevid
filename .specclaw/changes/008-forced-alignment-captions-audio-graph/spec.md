@@ -157,3 +157,10 @@ introducing a second dependency or a second cache root.
 - Phrase-block and classic-bottom-third caption styles, cloud providers, voice cloning,
   multi-speaker dialogue, music generation, and real-time/streaming are explicitly out of scope
   (see proposal.md).
+- **Known limitation (found in verify-report.md):** `layer-captions`'s painter converts frame
+  number to seconds via a hardcoded `DEFAULT_FPS = 30` constant, inherited from `layer-code`'s
+  identical pre-existing pattern (`PainterFn` carries no `fps`; `TimelineLayer` doesn't either).
+  On a `VideoSpec` with `fps !== 30`, captions desync from audio proportionally
+  (`actualFps/30`×). Not fixed here — threading real `fps` through `PainterFn` is a cross-cutting
+  change affecting `layer-code` too, out of this change's scope. Tracked as a follow-on for
+  whichever change next touches `PainterFn`'s signature.
