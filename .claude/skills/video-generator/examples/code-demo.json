@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "width": 1920,
+  "height": 1080,
+  "fps": 30,
+  "background": "#0d1117",
+  "meta": {
+    "title": "Code Demo",
+    "description": "Worked example showing a title scene followed by a code layer."
+  },
+  "scenes": [
+    {
+      "id": "title",
+      "duration": 2,
+      "layers": [
+        {
+          "type": "text",
+          "text": "Rendering a Frame",
+          "x": "center",
+          "y": "center",
+          "fontSize": 72,
+          "fontWeight": 700,
+          "color": "#ffffff",
+          "align": "center",
+          "animation": { "enter": "fade-up", "duration": 0.5 }
+        }
+      ]
+    },
+    {
+      "id": "code",
+      "duration": 5,
+      "transition": { "kind": "cross-fade", "duration": 0.4 },
+      "layers": [
+        {
+          "type": "code",
+          "code": "import { renderVideo } from \"claudevid\";\n\nawait renderVideo(spec, {\n  output: \"out.mp4\",\n  encoder: \"videotoolbox\",\n  quality: \"high\",\n});",
+          "lang": "typescript",
+          "theme": "github-dark",
+          "title": "render.ts",
+          "width": 1400,
+          "height": 520,
+          "x": "center",
+          "y": "center",
+          "showLineNumbers": true,
+          "animation": { "enter": "scale-fade", "duration": 0.5 }
+        }
+      ]
+    }
+  ]
+}

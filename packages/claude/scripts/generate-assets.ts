@@ -1,4 +1,5 @@
 import { mkdir, writeFile } from "node:fs/promises";
+import * as fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { exportCatalogue } from "@claudevid/motion";
@@ -32,6 +33,32 @@ export function generateSchemaContent(): object {
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const packageRoot = path.resolve(here, "..");
+const repoRoot = path.resolve(packageRoot, "..", "..");
+
+/**
+ * Copies the committed schema and examples into `.claude/skills/video-generator/` so the skill's
+ * bundled files stay byte-identical to `packages/claude`'s own committed copies (FR11/AC7). These
+ * are real file copies (not symlinks) — plain `fs.readFileSync`/`writeFileSync` — so the skill
+ * folder is self-contained for anyone who checks it out without the rest of the monorepo.
+ */
+export function syncSkillAssets(): void {
+  const skillRoot = path.join(repoRoot, ".claude", "skills", "video-generator");
+
+  const schemaSrc = path.join(packageRoot, "schemas", "video-spec.schema.json");
+  const schemaDestDir = path.join(skillRoot, "schemas");
+  fs.mkdirSync(schemaDestDir, { recursive: true });
+  fs.writeFileSync(path.join(schemaDestDir, "video-spec.schema.json"), fs.readFileSync(schemaSrc));
+
+  const examplesSrcDir = path.join(packageRoot, "examples");
+  const examplesDestDir = path.join(skillRoot, "examples");
+  fs.mkdirSync(examplesDestDir, { recursive: true });
+  for (const file of fs.readdirSync(examplesSrcDir)) {
+    if (!file.endsWith(".json")) continue;
+    fs.writeFileSync(path.join(examplesDestDir, file), fs.readFileSync(path.join(examplesSrcDir, file)));
+  }
+
+  console.log(`Synced schema + examples to ${path.relative(repoRoot, skillRoot)}`);
+}
 
 async function main() {
   const promptPath = path.join(packageRoot, "prompts", "video-director.md");
@@ -50,6 +77,8 @@ async function main() {
   console.log(
     `Wrote ${path.relative(packageRoot, schemaPath)} (${JSON.stringify(schemaContent).length} bytes)`,
   );
+
+  syncSkillAssets();
 }
 
 main().catch((err) => {
