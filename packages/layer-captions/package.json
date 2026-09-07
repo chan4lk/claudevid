@@ -1,5 +1,5 @@
 {
-  "name": "@claudevid/audio",
+  "name": "@claudevid/layer-captions",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -18,10 +18,11 @@
   },
   "dependencies": {
     "@claudevid/core": "workspace:*",
-    "@claudevid/encoder-ffmpeg": "workspace:*",
-    "@huggingface/transformers": "^3.8.1",
-    "kokoro-js": "^1.2.0",
-    "onnxruntime-node": "^1.19.0"
+    "@claudevid/renderer-canvas": "workspace:*",
+    "@claudevid/motion": "workspace:*",
+    "@claudevid/audio": "workspace:*",
+    "@napi-rs/canvas": "^1.0.8",
+    "zod": "^3.23.8"
   },
   "devDependencies": {
     "@types/node": "^22.7.4",

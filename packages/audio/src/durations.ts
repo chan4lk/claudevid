@@ -116,6 +116,7 @@ function resolveSynthesisRequest(block: NarrationBlock, opts: ComputeAudioDurati
     speed: block.speed ?? opts.defaultSpeed ?? FALLBACK_SPEED,
     modelId: PINNED_MODEL.id,
     modelDigest: PINNED_MODEL.digest,
+    lexiconDigest: "",
   };
 }
 

@@ -36,6 +36,7 @@ function baseRequest(overrides?: Partial<SynthesisRequest>): SynthesisRequest {
     speed: 1,
     modelId: "test-model",
     modelDigest: "a".repeat(64),
+    lexiconDigest: "",
     ...overrides,
   };
 }
@@ -119,6 +120,7 @@ describe("cache.ts (FR4)", () => {
       speed: 1,
       modelId: "m",
       modelDigest: "d",
+      lexiconDigest: "",
     };
     const reordered: SynthesisRequest = {
       modelDigest: "d",
@@ -126,6 +128,7 @@ describe("cache.ts (FR4)", () => {
       speed: 1,
       voice: "v",
       text: "hi",
+      lexiconDigest: "",
     };
 
     expect(hashSynthesisRequest(inOrder)).toBe(hashSynthesisRequest(reordered));

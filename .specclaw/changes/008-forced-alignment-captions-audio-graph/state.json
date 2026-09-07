@@ -1,0 +1,13 @@
+{
+  "change": "008-forced-alignment-captions-audio-graph",
+  "phase": "verify",
+  "branch": "specclaw/008-forced-alignment-captions-audio-graph",
+  "phases": {
+    "proposal": {"status":"approved","at":"2026-09-07T08:51:01Z"},
+    "spec": {"status":"done","at":"2026-09-07T08:54:53Z"},
+    "design": {"status":"done","at":"2026-09-07T08:56:02Z"},
+    "tasks": {"status":"done","at":"2026-09-07T08:56:54Z"},
+    "build": {"status":"in-progress","at":"2026-09-07T08:57:12Z"},
+    "verify": {"status":"passed","at":"2026-09-07T09:50:01Z","verdict":"PASS"}
+  }
+}

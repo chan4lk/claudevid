@@ -13,6 +13,11 @@ export interface SynthesisRequest {
   speed: number;
   modelId: string;
   modelDigest: string;
+  /** Digest of whichever pronunciation-lexicon entries (008's lexicon.ts) were actually applied
+   * to `text` for this request — "" when no lexicon entry applies (spec.md FR10, design.md D6).
+   * Part of the full request object hashed by cache.ts's `hashSynthesisRequest`, so a change here
+   * changes the cache key automatically (no cache.ts edit needed). */
+  lexiconDigest: string;
 }
 
 /** `cache.ts`'s (T-later) stored/returned shape for a single narration block's synthesis result
