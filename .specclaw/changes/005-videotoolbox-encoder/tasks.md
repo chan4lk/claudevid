@@ -121,7 +121,7 @@ Notes.
     `finish()`/`cancel()` throws synchronously (Edge Cases). `pipe.ts` calls `resolveProfile`/
     `buildArgv` and appends **zero** flags of its own (the FR2 contract T3 established).
 
-- [ ] `T9` — pipe.ts test suite: zero-FFmpeg parser test + isolated live-FFmpeg file
+- [x] `T9` — pipe.ts test suite: zero-FFmpeg parser test + isolated live-FFmpeg file
   - Files: `packages/encoder-ffmpeg/test/progress-parse.test.ts`, `packages/encoder-ffmpeg/test/pipe.live.test.ts`
   - Estimate: large
   - Kind: test
@@ -138,7 +138,7 @@ Notes.
 
 ### Wave 4 — tools/bench + full-workspace regression
 
-- [ ] `T10` — `tools/bench`: standalone bench script
+- [x] `T10` — `tools/bench`: standalone bench script
   - Files: `tools/bench/package.json`, `src/reference-spec.ts`, `src/bench.ts`, `test/bench-args.test.ts`
   - Estimate: medium
   - Kind: impl
@@ -155,7 +155,7 @@ Notes.
     part of the fast `pnpm -r run test` tier — `bench-args.test.ts` covers only its own
     CLI-argument parsing, mirroring `tools/motion-preview`'s precedent.
 
-- [ ] `T11` — Workspace-wide build/test/lint pass + bench smoke run
+- [x] `T11` — Workspace-wide build/test/lint pass + bench smoke run
   - Files: none (verification task)
   - Estimate: small
   - Kind: test
