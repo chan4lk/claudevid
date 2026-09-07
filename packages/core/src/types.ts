@@ -18,6 +18,12 @@ export interface SceneTransition {
   duration?: number;
 }
 
+export interface NarrationBlock {
+  text: string;
+  voice?: string;
+  speed?: number;
+}
+
 export interface Scene {
   id: string;
   duration: number | "auto";
@@ -25,6 +31,12 @@ export interface Scene {
   layers: Layer[];
   /** Transition into this scene from the previous one. Absent = `{ kind: "cut", duration: 0 }`. */
   transition?: SceneTransition;
+  /**
+   * Narration for this scene. Accepts a bare string, a single NarrationBlock, or an array of
+   * NarrationBlock at the schema boundary (see schema.ts); always resolved to NarrationBlock[]
+   * here.
+   */
+  narration?: NarrationBlock[];
 }
 
 export interface VideoSpec {
