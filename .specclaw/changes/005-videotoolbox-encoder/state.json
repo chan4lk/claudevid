@@ -1,11 +1,12 @@
 {
   "change": "005-videotoolbox-encoder",
-  "phase": "build",
+  "phase": "verify",
   "branch": "specclaw/005-videotoolbox-encoder",
   "phases": {
     "spec": {"status":"done","at":"2026-09-07T05:53:49Z"},
     "design": {"status":"done","at":"2026-09-07T05:53:49Z"},
     "tasks": {"status":"done","at":"2026-09-07T05:53:49Z"},
-    "build": {"status":"in-progress","at":"2026-09-07T05:54:37Z"}
+    "build": {"status":"in-progress","at":"2026-09-07T05:54:37Z"},
+    "verify": {"status":"passed","at":"2026-09-07T06:34:01Z","verdict":"PASS"}
   }
 }
