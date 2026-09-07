@@ -1,11 +1,12 @@
 {
   "change": "004-code-block-layer",
-  "phase": "build",
+  "phase": "verify",
   "branch": "specclaw/004-code-block-layer",
   "phases": {
     "spec": {"status":"done","at":"2026-09-07T04:24:15Z"},
     "design": {"status":"done","at":"2026-09-07T04:24:15Z"},
     "tasks": {"status":"done","at":"2026-09-07T04:24:16Z"},
-    "build": {"status":"in-progress","at":"2026-09-07T04:24:51Z"}
+    "build": {"status":"in-progress","at":"2026-09-07T04:24:51Z"},
+    "verify": {"status":"passed","at":"2026-09-07T05:43:16Z","verdict":"PASS"}
   }
 }
