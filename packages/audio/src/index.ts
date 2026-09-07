@@ -13,3 +13,14 @@ export { PINNED_MODEL, ModelDigestMismatchError, installModels, verifyInstalledM
 export { getOrSynthesize, hashSynthesisRequest, resolveCacheEntryPath, measureDurationSeconds } from "./cache.js";
 export { computeAudioDurations, EmptyNarrationError, MaxDurationExceededError } from "./durations.js";
 export type { ComputeAudioDurationsOptions } from "./durations.js";
+export {
+  align,
+  AlignmentValidationError,
+  LowConfidenceSpanError,
+  int16PcmBufferToFloat32,
+  resampleFloat32,
+  tokenizeReferenceText,
+} from "./align.js";
+export type { AlignOptions, RawAsrWord, RawAsrOutput } from "./align.js";
+export { applyLexicon, resolveLexiconDigest } from "./lexicon.js";
+export type { Lexicon, LexiconEntry } from "./lexicon.js";
