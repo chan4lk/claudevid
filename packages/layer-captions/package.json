@@ -21,6 +21,7 @@
     "@claudevid/renderer-canvas": "workspace:*",
     "@claudevid/motion": "workspace:*",
     "@claudevid/audio": "workspace:*",
+    "@napi-rs/canvas": "^1.0.8",
     "zod": "^3.23.8"
   },
   "devDependencies": {

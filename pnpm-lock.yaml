@@ -90,6 +90,9 @@ importers:
       '@claudevid/renderer-canvas':
         specifier: workspace:*
         version: link:../renderer-canvas
+      '@napi-rs/canvas':
+        specifier: ^1.0.8
+        version: 1.0.8
       zod:
         specifier: ^3.23.8
         version: 3.25.76
