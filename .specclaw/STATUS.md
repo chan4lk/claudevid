@@ -1,7 +1,7 @@
 # 🦞 SpecClaw Dashboard
 
 **Project:** claudevid
-**Last Updated:** 2026-09-07 04:24 UTC
+**Last Updated:** 2026-09-07 05:43 UTC
 
 ## Active Changes
 
@@ -9,7 +9,7 @@
 - 🔍 **001-videospec-core** — verify PASS | 13/13 tasks (100%) | 0 failed | PR #1 merged
 - 🔍 **002-canvas-render-engine** — verify PASS | 12/12 tasks (100%) | 0 failed | PR #4 merged
 - 🔍 **003-motion-system** — verify PASS | 14/14 tasks (100%) | 0 failed | PR #5 merged
-- 📝 **004-code-block-layer** — tasks done | 0/15 tasks (0%) | 0 failed
+- 🔍 **004-code-block-layer** — verify PASS | 15/15 tasks (100%) | 0 failed
 
 ## Pending Proposals
 
