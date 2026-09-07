@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "width": 1920,
+  "height": 1080,
+  "fps": 30,
+  "background": "#0b0f17",
+  "meta": {
+    "title": "Simple Title",
+    "description": "Minimal worked example: a title card with a background rect and animated text."
+  },
+  "scenes": [
+    {
+      "id": "intro",
+      "duration": 3,
+      "layers": [
+        {
+          "type": "rect",
+          "x": 0,
+          "y": 0,
+          "width": 1920,
+          "height": 1080,
+          "fill": "#0b0f17"
+        },
+        {
+          "type": "text",
+          "text": "Build Faster Videos with Claude",
+          "x": "center",
+          "y": "center",
+          "fontSize": 88,
+          "fontWeight": 700,
+          "color": "#ffffff",
+          "align": "center",
+          "animation": { "enter": "fade-up", "duration": 0.7 }
+        }
+      ]
+    },
+    {
+      "id": "subtitle",
+      "duration": 2.5,
+      "layers": [
+        {
+          "type": "text",
+          "text": "A claudevid worked example",
+          "x": "center",
+          "y": "center",
+          "fontSize": 48,
+          "fontWeight": 500,
+          "color": "#a5b4c3",
+          "align": "center",
+          "animation": { "enter": "fade", "duration": 0.5 }
+        }
+      ]
+    }
+  ]
+}
