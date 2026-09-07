@@ -148,3 +148,98 @@ describe("compileTimeline — edge cases", () => {
     expect(timeline.frameCount).toBeGreaterThan(0);
   });
 });
+
+describe("compileTimeline — scene transitions (change 003, AC7)", () => {
+  it("a cross-fade overlaps scene durations: 3s + 3s with a 0.5s cross-fade totals 5.5s, not 6.5s", () => {
+    const spec = makeSpec({
+      fps: 30,
+      scenes: [
+        { id: "a", duration: 3, layers: [] },
+        { id: "b", duration: 3, layers: [], transition: { kind: "cross-fade", duration: 0.5 } },
+      ],
+    });
+
+    const timeline = compileTimeline(spec);
+
+    expect(timeline.frameCount).toBe(Math.round(5.5 * 30));
+    expect(timeline.sceneWindows[1]!.transitionInFrames).toBe(15);
+    expect(timeline.sceneWindows[1]!.startFrame).toBe(timeline.sceneWindows[0]!.endFrame - 15);
+  });
+
+  it("kind: 'cut' (default, no transition field) reproduces byte-identical output to pre-change behavior", () => {
+    const scenesNoTransition = [
+      { id: "a", duration: 2.5, layers: [] },
+      { id: "b", duration: 3.333, layers: [] },
+      { id: "c", duration: 1.0, layers: [] },
+    ];
+    const scenesExplicitCut = scenesNoTransition.map((s) => ({ ...s, transition: { kind: "cut" as const, duration: 0 } }));
+
+    const withoutField = compileTimeline(makeSpec({ scenes: scenesNoTransition }));
+    const withExplicitCut = compileTimeline(makeSpec({ scenes: scenesExplicitCut }));
+
+    expect(withoutField.frameCount).toBe(205);
+    expect(withoutField.sceneWindows).toEqual([
+      { sceneId: "a", startFrame: 0, endFrame: 75, transitionInFrames: 0 },
+      { sceneId: "b", startFrame: 75, endFrame: 175, transitionInFrames: 0 },
+      { sceneId: "c", startFrame: 175, endFrame: 205, transitionInFrames: 0 },
+    ]);
+    expect(withExplicitCut.frameCount).toBe(withoutField.frameCount);
+    expect(withExplicitCut.sceneWindows).toEqual(withoutField.sceneWindows);
+  });
+
+  it("clamps a transition longer than either neighbour's own duration instead of producing a negative-length scene", () => {
+    const spec = makeSpec({
+      fps: 30,
+      scenes: [
+        { id: "a", duration: 1, layers: [] }, // 30 frames
+        { id: "b", duration: 0.2, layers: [], transition: { kind: "cross-fade", duration: 10 } }, // 6 frames
+      ],
+    });
+
+    const timeline = compileTimeline(spec);
+
+    // min(requested=300, prevFrames-1=29, sceneFrames-1=5) = 5
+    expect(timeline.sceneWindows[1]!.transitionInFrames).toBe(5);
+    expect(timeline.sceneWindows[1]!.endFrame).toBeGreaterThan(timeline.sceneWindows[1]!.startFrame);
+    expect(timeline.sceneWindows[0]!.endFrame).toBeGreaterThan(timeline.sceneWindows[0]!.startFrame);
+  });
+
+  it("transitionAt returns null outside any overlap window", () => {
+    const spec = makeSpec({
+      fps: 30,
+      scenes: [
+        { id: "a", duration: 3, layers: [{ type: "text", text: "A" }] },
+        { id: "b", duration: 3, layers: [{ type: "text", text: "B" }], transition: { kind: "cross-fade", duration: 0.5 } },
+      ],
+    });
+
+    const timeline = compileTimeline(spec);
+
+    expect(timeline.transitionAt(0)).toBeNull();
+    expect(timeline.transitionAt(timeline.sceneWindows[1]!.endFrame - 1)).toBeNull();
+  });
+
+  it("transitionAt returns both scenes' layers and a progressing t inside the overlap window", () => {
+    const spec = makeSpec({
+      fps: 30,
+      scenes: [
+        { id: "a", duration: 3, layers: [{ type: "text", text: "A" }] },
+        { id: "b", duration: 3, layers: [{ type: "text", text: "B" }], transition: { kind: "cross-fade", duration: 0.5 } },
+      ],
+    });
+
+    const timeline = compileTimeline(spec);
+    const overlapStart = timeline.sceneWindows[1]!.startFrame;
+    const overlapFrames = timeline.sceneWindows[1]!.transitionInFrames;
+
+    const first = timeline.transitionAt(overlapStart);
+    expect(first).not.toBeNull();
+    expect(first!.t).toBe(0);
+    expect(first!.outgoing.some((l) => l.sceneId === "a")).toBe(true);
+    expect(first!.incoming.some((l) => l.sceneId === "b")).toBe(true);
+
+    const last = timeline.transitionAt(overlapStart + overlapFrames - 1);
+    expect(last!.t).toBeGreaterThan(0);
+    expect(last!.t).toBeLessThan(1);
+  });
+});

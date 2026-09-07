@@ -510,6 +510,19 @@ field. No existing export's signature changes otherwise.
    test assertions and any future caller that doesn't know about transitions. Keeping it
    untouched and adding a second, opt-in method is a strictly additive change to a sealed,
    verify-PASSed package (NFR3).
+7. **D6.5 — `binarySearchSceneWindow` needed a real algorithm change, found during
+   implementation.** The design-time assumption that scene windows stay disjoint (only
+   `startFrame` shifts backward, `endFrame` untouched) means the outgoing scene's own window
+   and the incoming scene's window genuinely overlap in frame-range space during a transition
+   — the old "does `[start,end)` contain `frame`" bisection can return either window there,
+   since both contain it. Fixed by searching for "the rightmost window whose `startFrame <=
+   frame`" instead (still correct via plain bisection, since `startFrame` stays strictly
+   increasing even with overlap — provable from the `min`-guard in `compileTimeline`). This is
+   provably identical to the old result whenever windows are disjoint (every pre-existing
+   caller), so it is a pure bugfix for the new overlapping case, not a behavior change for
+   001/002. Caught by AC7's own `transitionAt` test, not by inspection — recorded here per
+   this repo's own precedent (002 design.md's Key Decision 7) for design-time guesses
+   superseded once actually implemented.
 
 ## Risks & Mitigations
 

@@ -106,21 +106,29 @@ function flattenLayers(
   return result;
 }
 
+// Scene windows are sorted by strictly-increasing startFrame, but — since a cross-fade
+// (change 003) pulls a scene's startFrame backward into its predecessor's still-unshortened
+// endFrame — are no longer guaranteed disjoint during an overlap. The old "does this window's
+// [start,end) contain frame" bisection assumed disjointness and could return either window in
+// an overlap; the correct query is "the rightmost window whose startFrame <= frame" (the most
+// recently *started* scene), which reduces to the exact old result whenever windows are
+// disjoint (the non-overlapping case every existing caller already relies on).
 function binarySearchSceneWindow(sceneWindows: SceneWindow[], frame: number): SceneWindow | undefined {
   let lo = 0;
   let hi = sceneWindows.length - 1;
+  let candidate: SceneWindow | undefined;
   while (lo <= hi) {
     const mid = (lo + hi) >> 1;
     const window = sceneWindows[mid]!;
-    if (frame < window.startFrame) {
-      hi = mid - 1;
-    } else if (frame >= window.endFrame) {
+    if (window.startFrame <= frame) {
+      candidate = window;
       lo = mid + 1;
     } else {
-      return window;
+      hi = mid - 1;
     }
   }
-  return undefined;
+  if (!candidate || frame >= candidate.endFrame) return undefined;
+  return candidate;
 }
 
 /**
