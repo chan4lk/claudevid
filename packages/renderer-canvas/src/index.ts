@@ -9,10 +9,13 @@ import { paintRectLayer } from "./draw-shapes.js";
 import { paintImageLayer } from "./draw-image.js";
 import { loadAndCacheImage } from "./draw-image.js";
 import type { FrameBuffer } from "./frame-buffer.js";
+import { getPainter } from "./painters.js";
 
 export type { FrameBuffer } from "./frame-buffer.js";
 export { createFrameBuffer, createFrameBufferPool } from "./frame-buffer.js";
 export type { RenderStats } from "./stats.js";
+export { registerPainter, getPainter } from "./painters.js";
+export type { PainterFn } from "./painters.js";
 
 const DEFAULT_CACHE_LIMIT_BYTES = 512 * 1024 * 1024;
 const DEFAULT_BACKGROUND = "#000000";
@@ -151,11 +154,37 @@ export function createRenderer(width: number, height: number, opts: CreateRender
           }
           break;
         }
-        default:
+        default: {
           // "group" (already flattened into per-child entries by core's `flattenLayers` —
-          // see timeline.ts) and any future layer type registered via `registerLayer` with
-          // no painter here yet: skip silently, no error (FR9/dispatch contract).
-          continue;
+          // see timeline.ts): no painter is ever registered for it, always falls through to
+          // `continue` below. Any other type registered via `registerLayer` (change 004's
+          // `registerPainter` registry, painters.ts) gets a chance here before the same
+          // silent-skip fallback (FR9/dispatch contract) for a type with neither a built-in
+          // case nor a registered painter.
+          const paint = getPainter(layer.layer.type);
+          if (!paint) continue;
+          // Same transform-bracket shape as the text/rect/image cases above, minus the
+          // box-center pivot those use before `drawImage`-ing a bitmap: a registered painter
+          // draws directly onto `ctx` rather than handing back a sized bitmap, so there is no
+          // box width/height here to center a rotate/scale pivot on. The bracket still
+          // applies opacity/translate/rotate/scale from the resolved `bag`, pivoted at the
+          // layer's own (x, y) anchor, and otherwise just translates to (x, y) — a painter
+          // that needs box-center pivoting reads its own layer's width/height off
+          // `layer.layer` (cast internally, per design.md 004 Key Decision D3/D4) and
+          // compensates itself.
+          ctx.save();
+          if (bag) {
+            ctx.globalAlpha = bag.opacity ?? 1;
+            ctx.translate(layer.x + (bag.x ?? 0), layer.y + (bag.y ?? 0));
+            ctx.rotate(((bag.rotation ?? 0) * Math.PI) / 180);
+            ctx.scale(bag.scaleX ?? 1, bag.scaleY ?? 1);
+          } else {
+            ctx.translate(layer.x, layer.y);
+          }
+          paint(layer.layer, layer, frame, ctx);
+          ctx.restore();
+          break;
+        }
       }
       stats.recordLayerTypeMs(layer.layer.type, Date.now() - layerStart);
     }
