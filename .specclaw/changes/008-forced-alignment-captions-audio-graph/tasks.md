@@ -19,7 +19,7 @@ test. Wave 5 is the final full-workspace regression pass.
 
 ### Wave 1 — Shared types
 
-- [ ] `T1` — `word-timing-types.ts`: `WordTiming`, `AlignRequest`, `AlignResult`
+- [x] `T1` — `word-timing-types.ts`: `WordTiming`, `AlignRequest`, `AlignResult`
   - Files: `packages/audio/src/word-timing-types.ts`
   - Estimate: small
   - Kind: impl
@@ -27,7 +27,7 @@ test. Wave 5 is the final full-workspace regression pass.
     `start`/`end`/`estimated`/`confidence?` on `WordTiming`; `start`/`end` documented as
     block-relative directly on the type (design.md's offset-convention decision).
 
-- [ ] `T2` — Extend `SynthesisRequest` with `lexiconDigest`
+- [x] `T2` — Extend `SynthesisRequest` with `lexiconDigest`
   - Files: `packages/audio/src/types.ts`
   - Estimate: small
   - Kind: impl
@@ -40,7 +40,7 @@ test. Wave 5 is the final full-workspace regression pass.
 
 ### Wave 2 — align.ts, lexicon.ts (independent of each other)
 
-- [ ] `T3` — `align.ts`: ASR + reconciliation + validation + fail-closed/estimated
+- [x] `T3` — `align.ts`: ASR + reconciliation + validation + fail-closed/estimated
   - Files: `packages/audio/src/align.ts`, `packages/audio/test/align.test.ts`
   - Estimate: large
   - Kind: impl
@@ -64,7 +64,7 @@ test. Wave 5 is the final full-workspace regression pass.
     (clean stream), AC2 (dropped/inserted/reordered word fixtures, 3 cases), AC3 (non-monotonic/
     negative/past-length timestamp rejection), AC4 (both `allowEstimated` directions).
 
-- [ ] `T4` — `lexicon.ts`: pronunciation lexicon + resolved digest
+- [x] `T4` — `lexicon.ts`: pronunciation lexicon + resolved digest
   - Files: `packages/audio/src/lexicon.ts`, `packages/audio/test/lexicon.test.ts`
   - Estimate: medium
   - Kind: impl
@@ -80,7 +80,7 @@ test. Wave 5 is the final full-workspace regression pass.
 
 ### Wave 3 — layer-captions package, graph.ts/mux.ts (independent workstreams)
 
-- [ ] `T5` — `packages/layer-captions`: package scaffolding + schema + `registerLayer`
+- [x] `T5` — `packages/layer-captions`: package scaffolding + schema + `registerLayer`
   - Files: `packages/layer-captions/package.json`, `tsup.config.ts`, `vitest.config.ts`,
     `tsconfig.json`, `src/schema.ts`, `src/index.ts` (stub)
   - Estimate: medium
@@ -95,7 +95,7 @@ test. Wave 5 is the final full-workspace regression pass.
     not here) and calls `registerLayer("captions", captionsLayerSchema)` at module load, exactly
     matching `packages/layer-code/src/schema.ts`'s own `registerLayer` call.
 
-- [ ] `T6` — `layer-captions`: `render.ts` (karaoke-highlight painter) + `registerPainter`
+- [x] `T6` — `layer-captions`: `render.ts` (karaoke-highlight painter) + `registerPainter`
   - Files: `packages/layer-captions/src/render.ts`, `packages/layer-captions/src/index.ts`
     (finalize exports + `registerPainter` call), `packages/layer-captions/test/render.test.ts`,
     `packages/layer-captions/test/schema.test.ts`
@@ -115,7 +115,7 @@ test. Wave 5 is the final full-workspace regression pass.
     real canvas rendering needed beyond what `layer-code`'s own render tests already establish as
     this repo's pattern).
 
-- [ ] `T7` — `graph.ts`: argv-safe FFmpeg filter graph (gain/fade/duck/loudnorm)
+- [x] `T7` — `graph.ts`: argv-safe FFmpeg filter graph (gain/fade/duck/loudnorm)
   - Files: `packages/audio/src/graph.ts`, `packages/audio/test/graph.test.ts`
   - Estimate: large
   - Kind: impl
@@ -134,7 +134,7 @@ test. Wave 5 is the final full-workspace regression pass.
     test environment, gate this specific assertion the same way 005's `pipe.live.test.ts`
     isolates real-FFmpeg tests).
 
-- [ ] `T8` — `mux.ts`: distinct-path mux, temp+rename, duration-tolerance check
+- [x] `T8` — `mux.ts`: distinct-path mux, temp+rename, duration-tolerance check
   - Files: `packages/audio/src/mux.ts`, `packages/audio/test/mux.test.ts`
   - Estimate: medium
   - Kind: impl
@@ -148,7 +148,7 @@ test. Wave 5 is the final full-workspace regression pass.
 
 ### Wave 4 — export.ts + gated integration test
 
-- [ ] `T9` — `export.ts`: SRT/VTT from `WordTiming[]`
+- [x] `T9` — `export.ts`: SRT/VTT from `WordTiming[]`
   - Files: `packages/audio/src/export.ts`, `packages/audio/test/export.test.ts`
   - Estimate: small
   - Kind: impl
@@ -159,7 +159,7 @@ test. Wave 5 is the final full-workspace regression pass.
     algorithm beyond what's needed for a readable subtitle), marking `estimated: true` entries
     distinctly (e.g. an inline marker or separate cue styling) per AC9.
 
-- [ ] `T10` — Gated live-alignment integration test + workspace-wide build/test/lint pass
+- [x] `T10` — Gated live-alignment integration test + workspace-wide build/test/lint pass
   - Files: `packages/audio/test/align.live.test.ts`
   - Estimate: medium
   - Kind: test
