@@ -26,9 +26,9 @@ describe("compileTimeline — golden frame windows (AC4)", () => {
     const timeline = compileTimeline(spec);
 
     expect(timeline.sceneWindows).toEqual([
-      { sceneId: "a", startFrame: 0, endFrame: 75 },
-      { sceneId: "b", startFrame: 75, endFrame: 175 },
-      { sceneId: "c", startFrame: 175, endFrame: 205 },
+      { sceneId: "a", startFrame: 0, endFrame: 75, transitionInFrames: 0 },
+      { sceneId: "b", startFrame: 75, endFrame: 175, transitionInFrames: 0 },
+      { sceneId: "c", startFrame: 175, endFrame: 205, transitionInFrames: 0 },
     ]);
     expect(timeline.frameCount).toBe(205);
 
@@ -78,7 +78,7 @@ describe("compileTimeline — duration: \"auto\" (AC6, AC7)", () => {
 
     const timeline = compileTimeline(spec, { audioDurations: { voiceover: 4.2 } });
 
-    expect(timeline.sceneWindows[0]).toEqual({ sceneId: "voiceover", startFrame: 0, endFrame: 126 });
+    expect(timeline.sceneWindows[0]).toEqual({ sceneId: "voiceover", startFrame: 0, endFrame: 126, transitionInFrames: 0 });
   });
 });
 
@@ -132,7 +132,7 @@ describe("compileTimeline — edge cases", () => {
 
     const timeline = compileTimeline(spec);
 
-    expect(timeline.sceneWindows[0]).toEqual({ sceneId: "zero", startFrame: 0, endFrame: 0 });
+    expect(timeline.sceneWindows[0]).toEqual({ sceneId: "zero", startFrame: 0, endFrame: 0, transitionInFrames: 0 });
     expect(timeline.activeAt(0)).toEqual([]);
   });
 
