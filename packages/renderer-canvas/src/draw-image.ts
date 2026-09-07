@@ -1,5 +1,6 @@
-import { loadImage, type Image, type SKRSContext2D } from "@napi-rs/canvas";
+import { loadImage, type Canvas, type Image } from "@napi-rs/canvas";
 import type { ImageLayer } from "@claudevid/core";
+import type { RasterCache } from "./raster-cache.js";
 
 const decodeCache = new Map<string, Image>();
 
@@ -39,21 +40,44 @@ export function computeFitRect(
   return { sx: (imgWidth - sw) / 2, sy: (imgHeight - sh) / 2, sw, sh, dx: 0, dy: 0, dw: boxWidth, dh: boxHeight };
 }
 
-export async function paintImageLayer(
-  ctx: SKRSContext2D,
-  layer: ImageLayer,
-  resolvedX: number,
-  resolvedY: number
-): Promise<void> {
+// Plain string-join "hash", matching text.ts's `contentHash`: Map keys only need to be unique and
+// stable, not cryptographic. `src` is carried whole — it is the only stable identity an image
+// layer has, and `decodeCache` above already keys on it.
+function contentHash(parts: (string | number)[]): string {
+  return parts.join("|");
+}
+
+/**
+ * Rasterizes an image layer into a box-sized bitmap, cached by `(src, box, fit)` — the same
+ * measure-once/raster-once/blit-many shape `paintTextLayer` and `paintRectLayer` use (FR4/FR5).
+ *
+ * The cache is what makes a scaled image cheap. `decodeCache` above only avoids re-*decoding*;
+ * without this second layer the `drawImage` below re-runs the source->box resample on every
+ * repainted frame, and that resample — not the decode, and not the blit — is the actual cost.
+ * Measured at 1080x1920 with a 4000x2667 source: 7.71ms/frame uncached vs 2.08ms for a source
+ * already sized to the box. Caching the resampled result collapses the two cases, so an
+ * oversized background costs the same as a pre-sized one after its first frame.
+ *
+ * Fit geometry is baked into the bitmap rather than applied at blit time: for `contain` the
+ * letterbox offset (`dx`/`dy`) lands inside the box-sized bitmap, so every caller draws the
+ * result at the layer's own (x, y) with no per-fit special-casing — and two layers sharing a
+ * `(src, box, fit)` triple share one bitmap.
+ */
+export async function paintImageLayer(cache: RasterCache, layer: ImageLayer): Promise<Canvas> {
   const image = await loadAndCacheImage(layer.src);
   const boxWidth = layer.width ?? image.naturalWidth;
   const boxHeight = layer.height ?? image.naturalHeight;
-  const { sx, sy, sw, sh, dx, dy, dw, dh } = computeFitRect(
-    image.naturalWidth,
-    image.naturalHeight,
-    boxWidth,
-    boxHeight,
-    layer.fit ?? "fill"
-  );
-  ctx.drawImage(image, sx, sy, sw, sh, resolvedX + dx, resolvedY + dy, dw, dh);
+  const fit = layer.fit ?? "fill";
+  const key = contentHash([layer.src, boxWidth, boxHeight, fit]);
+
+  return cache.getOrRender(key, Math.ceil(boxWidth), Math.ceil(boxHeight), (ctx) => {
+    const { sx, sy, sw, sh, dx, dy, dw, dh } = computeFitRect(
+      image.naturalWidth,
+      image.naturalHeight,
+      boxWidth,
+      boxHeight,
+      fit
+    );
+    ctx.drawImage(image, sx, sy, sw, sh, dx, dy, dw, dh);
+  });
 }
