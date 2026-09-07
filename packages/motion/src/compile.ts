@@ -97,6 +97,11 @@ function compileTracksForLayer(
   if (resolved.length > 0) compiled.set(tl.layerKey, resolved);
 }
 
+/** Test-only export (mirrors renderer-canvas's `_layoutCacheSizeForTests` convention) — lets
+ * compile.test.ts exercise the unsettled-spring diagnostic path directly, since no shipped
+ * v1 preset uses spring easing (AC4). */
+export { compileTracksForLayer as _compileTracksForLayerForTests };
+
 /**
  * The named baker/compiler (spec.md FR8): resolves every layer's `animation.enter` against
  * the preset registry, applies group stagger (FR10/FR11), bakes any spring easing using
