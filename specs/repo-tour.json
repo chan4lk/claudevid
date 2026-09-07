@@ -1,0 +1,1674 @@
+{
+  "version": 1,
+  "width": 1920,
+  "height": 1080,
+  "fps": 30,
+  "background": "#0a0e14",
+  "meta": {
+    "title": "claudevid \u2014 Repo Tour",
+    "description": "A two-minute tour of the claudevid monorepo: the VideoSpec contract, the timeline compiler, the canvas renderer, the motion system, the code layer, the FFmpeg encoder, local TTS, and the CLI."
+  },
+  "scenes": [
+    {
+      "id": "intro",
+      "duration": 7,
+      "narration": "This is claudevid, a motion graphics pipeline where Claude writes the video instead of the code.",
+      "layers": [
+        {
+          "type": "rect",
+          "x": 900,
+          "y": 372,
+          "width": 120,
+          "height": 6,
+          "radius": 3,
+          "fill": "#58a6ff",
+          "animation": {
+            "enter": "fade",
+            "duration": 0.6
+          }
+        },
+        {
+          "type": "text",
+          "text": "claudevid",
+          "x": 626,
+          "y": 436,
+          "fontSize": 140,
+          "fontWeight": 700,
+          "color": "#e6edf3",
+          "align": "center",
+          "animation": {
+            "enter": "fade-up",
+            "duration": 0.8,
+            "easing": "ease-out-cubic"
+          }
+        },
+        {
+          "type": "text",
+          "text": "Claude writes the video. The pipeline renders it.",
+          "x": 486,
+          "y": 650,
+          "fontSize": 42,
+          "fontWeight": 400,
+          "color": "#8b949e",
+          "align": "center",
+          "animation": {
+            "enter": "fade-up",
+            "duration": 0.7,
+            "delay": 0.35
+          }
+        }
+      ]
+    },
+    {
+      "id": "problem",
+      "duration": 6.45,
+      "transition": {
+        "kind": "cross-fade",
+        "duration": 0.4
+      },
+      "narration": "Hand writing animation code is slow. Every timing tweak means another rebuild.",
+      "layers": [
+        {
+          "type": "rect",
+          "x": 140,
+          "y": 340,
+          "width": 96,
+          "height": 6,
+          "radius": 3,
+          "fill": "#58a6ff",
+          "animation": {
+            "enter": "slide-right",
+            "duration": 0.5
+          }
+        },
+        {
+          "type": "text",
+          "text": "THE PROBLEM",
+          "x": 140,
+          "y": 384,
+          "fontSize": 28,
+          "fontWeight": 700,
+          "color": "#58a6ff",
+          "align": "left",
+          "animation": {
+            "enter": "fade",
+            "duration": 0.4
+          }
+        },
+        {
+          "type": "text",
+          "text": "Hand-written animation code is slow.",
+          "x": 140,
+          "y": 440,
+          "fontSize": 72,
+          "fontWeight": 700,
+          "color": "#e6edf3",
+          "align": "left",
+          "maxWidth": 1560,
+          "animation": {
+            "enter": "fade-up",
+            "duration": 0.6,
+            "easing": "ease-out-cubic"
+          }
+        },
+        {
+          "type": "text",
+          "text": "Every timing tweak is another edit, another rebuild, another watch.",
+          "x": 140,
+          "y": 636,
+          "fontSize": 36,
+          "fontWeight": 400,
+          "color": "#8b949e",
+          "align": "left",
+          "maxWidth": 1400,
+          "lineHeight": 1.45,
+          "animation": {
+            "enter": "fade-up",
+            "duration": 0.6,
+            "delay": 0.25
+          }
+        }
+      ]
+    },
+    {
+      "id": "spec",
+      "duration": 9.35,
+      "transition": {
+        "kind": "cross-fade",
+        "duration": 0.4
+      },
+      "narration": "So claudevid turns the video into data: one JSON document holding scenes, layers, animation, and narration.",
+      "layers": [
+        {
+          "type": "rect",
+          "x": 140,
+          "y": 260,
+          "width": 96,
+          "height": 6,
+          "radius": 3,
+          "fill": "#58a6ff",
+          "animation": {
+            "enter": "slide-right",
+            "duration": 0.5
+          }
+        },
+        {
+          "type": "text",
+          "text": "THE CONTRACT",
+          "x": 140,
+          "y": 304,
+          "fontSize": 28,
+          "fontWeight": 700,
+          "color": "#58a6ff",
+          "align": "left",
+          "animation": {
+            "enter": "fade",
+            "duration": 0.4
+          }
+        },
+        {
+          "type": "text",
+          "text": "The video is data.",
+          "x": 140,
+          "y": 360,
+          "fontSize": 72,
+          "fontWeight": 700,
+          "color": "#e6edf3",
+          "align": "left",
+          "animation": {
+            "enter": "fade-up",
+            "duration": 0.6,
+            "easing": "ease-out-cubic"
+          }
+        },
+        {
+          "type": "text",
+          "text": "One VideoSpec document describes the whole film.",
+          "x": 140,
+          "y": 470,
+          "fontSize": 36,
+          "fontWeight": 400,
+          "color": "#8b949e",
+          "align": "left",
+          "maxWidth": 1400,
+          "animation": {
+            "enter": "fade",
+            "duration": 0.5,
+            "delay": 0.2
+          }
+        },
+        {
+          "type": "group",
+          "id": "pillar-cards",
+          "animation": {
+            "enter": "fade-up",
+            "duration": 0.5,
+            "delay": 0.5,
+            "easing": "ease-out-cubic",
+            "stagger": {
+              "each": 0.12,
+              "from": "first"
+            }
+          },
+          "children": [
+            {
+              "type": "rect",
+              "x": 140,
+              "y": 620,
+              "width": 380,
+              "height": 120,
+              "radius": 16,
+              "fill": "#111823",
+              "stroke": "#1f2a37",
+              "strokeWidth": 2
+            },
+            {
+              "type": "rect",
+              "x": 550,
+              "y": 620,
+              "width": 380,
+              "height": 120,
+              "radius": 16,
+              "fill": "#111823",
+              "stroke": "#1f2a37",
+              "strokeWidth": 2
+            },
+            {
+              "type": "rect",
+              "x": 960,
+              "y": 620,
+              "width": 380,
+              "height": 120,
+              "radius": 16,
+              "fill": "#111823",
+              "stroke": "#1f2a37",
+              "strokeWidth": 2
+            },
+            {
+              "type": "rect",
+              "x": 1370,
+              "y": 620,
+              "width": 380,
+              "height": 120,
+              "radius": 16,
+              "fill": "#111823",
+              "stroke": "#1f2a37",
+              "strokeWidth": 2
+            }
+          ]
+        },
+        {
+          "type": "group",
+          "id": "pillar-labels",
+          "animation": {
+            "enter": "fade-up",
+            "duration": 0.5,
+            "delay": 0.5,
+            "easing": "ease-out-cubic",
+            "stagger": {
+              "each": 0.12,
+              "from": "first"
+            }
+          },
+          "children": [
+            {
+              "type": "text",
+              "text": "scenes",
+              "x": 176,
+              "y": 662,
+              "fontSize": 34,
+              "fontWeight": 700,
+              "color": "#e6edf3",
+              "align": "left",
+              "fontFamily": "JetBrains Mono, monospace"
+            },
+            {
+              "type": "text",
+              "text": "layers",
+              "x": 586,
+              "y": 662,
+              "fontSize": 34,
+              "fontWeight": 700,
+              "color": "#e6edf3",
+              "align": "left",
+              "fontFamily": "JetBrains Mono, monospace"
+            },
+            {
+              "type": "text",
+              "text": "animation",
+              "x": 996,
+              "y": 662,
+              "fontSize": 34,
+              "fontWeight": 700,
+              "color": "#e6edf3",
+              "align": "left",
+              "fontFamily": "JetBrains Mono, monospace"
+            },
+            {
+              "type": "text",
+              "text": "narration",
+              "x": 1406,
+              "y": 662,
+              "fontSize": 34,
+              "fontWeight": 700,
+              "color": "#e6edf3",
+              "align": "left",
+              "fontFamily": "JetBrains Mono, monospace"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "schema",
+      "duration": 9.05,
+      "transition": {
+        "kind": "cross-fade",
+        "duration": 0.4
+      },
+      "narration": "A Zod schema is the single source of truth, and the types are inferred from it, so the validator and the types can never disagree.",
+      "layers": [
+        {
+          "type": "rect",
+          "x": 140,
+          "y": 170,
+          "width": 96,
+          "height": 6,
+          "radius": 3,
+          "fill": "#58a6ff",
+          "animation": {
+            "enter": "slide-right",
+            "duration": 0.5
+          }
+        },
+        {
+          "type": "text",
+          "text": "ONE SOURCE OF TRUTH",
+          "x": 140,
+          "y": 214,
+          "fontSize": 28,
+          "fontWeight": 700,
+          "color": "#58a6ff",
+          "align": "left",
+          "animation": {
+            "enter": "fade",
+            "duration": 0.4
+          }
+        },
+        {
+          "type": "text",
+          "text": "Zod is the schema. Types are inferred.",
+          "x": 140,
+          "y": 268,
+          "fontSize": 64,
+          "fontWeight": 700,
+          "color": "#e6edf3",
+          "align": "left",
+          "maxWidth": 1600,
+          "animation": {
+            "enter": "fade-up",
+            "duration": 0.6,
+            "easing": "ease-out-cubic"
+          }
+        },
+        {
+          "type": "code",
+          "code": "export const sceneSchema = z.object({\n  id: z.string().min(1),\n  duration: z.union([z.number().min(0), z.literal(\"auto\")]),\n  layers: z.array(z.lazy(() => layerUnion())),\n  transition: sceneTransitionSchema.optional(),\n  narration: narrationSchema.optional(),\n});\n\nexport type Scene = z.infer<typeof sceneSchema>;",
+          "lang": "typescript",
+          "theme": "github-dark",
+          "title": "packages/core/src/schema.ts",
+          "x": 260,
+          "y": 430,
+          "width": 1400,
+          "height": 460,
+          "fontSize": 26,
+          "showLineNumbers": true,
+          "animation": {
+            "enter": "scale-fade",
+            "duration": 0.55,
+            "delay": 0.3
+          }
+        }
+      ]
+    },
+    {
+      "id": "pipeline",
+      "duration": 9.2,
+      "transition": {
+        "kind": "cross-fade",
+        "duration": 0.4
+      },
+      "narration": "From there it is five stages. Validate the spec, compile a timeline, render every frame, encode, and mux the audio.",
+      "layers": [
+        {
+          "type": "rect",
+          "x": 140,
+          "y": 300,
+          "width": 96,
+          "height": 6,
+          "radius": 3,
+          "fill": "#58a6ff",
+          "animation": {
+            "enter": "slide-right",
+            "duration": 0.5
+          }
+        },
+        {
+          "type": "text",
+          "text": "THE PIPELINE",
+          "x": 140,
+          "y": 344,
+          "fontSize": 28,
+          "fontWeight": 700,
+          "color": "#58a6ff",
+          "align": "left",
+          "animation": {
+            "enter": "fade",
+            "duration": 0.4
+          }
+        },
+        {
+          "type": "text",
+          "text": "Five stages, one command.",
+          "x": 140,
+          "y": 400,
+          "fontSize": 72,
+          "fontWeight": 700,
+          "color": "#e6edf3",
+          "align": "left",
+          "animation": {
+            "enter": "fade-up",
+            "duration": 0.6,
+            "easing": "ease-out-cubic"
+          }
+        },
+        {
+          "type": "group",
+          "id": "stage-cards",
+          "animation": {
+            "enter": "fade-up",
+            "duration": 0.45,
+            "delay": 0.55,
+            "easing": "ease-out-cubic",
+            "stagger": {
+              "each": 0.14,
+              "from": "first"
+            }
+          },
+          "children": [
+            {
+              "type": "rect",
+              "x": 162,
+              "y": 600,
+              "width": 300,
+              "height": 116,
+              "radius": 16,
+              "fill": "#111823",
+              "stroke": "#1f2a37",
+              "strokeWidth": 2
+            },
+            {
+              "type": "rect",
+              "x": 486,
+              "y": 600,
+              "width": 300,
+              "height": 116,
+              "radius": 16,
+              "fill": "#111823",
+              "stroke": "#1f2a37",
+              "strokeWidth": 2
+            },
+            {
+              "type": "rect",
+              "x": 810,
+              "y": 600,
+              "width": 300,
+              "height": 116,
+              "radius": 16,
+              "fill": "#111823",
+              "stroke": "#1f2a37",
+              "strokeWidth": 2
+            },
+            {
+              "type": "rect",
+              "x": 1134,
+              "y": 600,
+              "width": 300,
+              "height": 116,
+              "radius": 16,
+              "fill": "#111823",
+              "stroke": "#1f2a37",
+              "strokeWidth": 2
+            },
+            {
+              "type": "rect",
+              "x": 1458,
+              "y": 600,
+              "width": 300,
+              "height": 116,
+              "radius": 16,
+              "fill": "#111823",
+              "stroke": "#1f2a37",
+              "strokeWidth": 2
+            }
+          ]
+        },
+        {
+          "type": "group",
+          "id": "stage-labels",
+          "animation": {
+            "enter": "fade-up",
+            "duration": 0.45,
+            "delay": 0.55,
+            "easing": "ease-out-cubic",
+            "stagger": {
+              "each": 0.14,
+              "from": "first"
+            }
+          },
+          "children": [
+            {
+              "type": "text",
+              "text": "validate",
+              "x": 194,
+              "y": 640,
+              "fontSize": 30,
+              "fontWeight": 700,
+              "color": "#e6edf3",
+              "align": "left",
+              "fontFamily": "JetBrains Mono, monospace"
+            },
+            {
+              "type": "text",
+              "text": "timeline",
+              "x": 518,
+              "y": 640,
+              "fontSize": 30,
+              "fontWeight": 700,
+              "color": "#e6edf3",
+              "align": "left",
+              "fontFamily": "JetBrains Mono, monospace"
+            },
+            {
+              "type": "text",
+              "text": "render",
+              "x": 842,
+              "y": 640,
+              "fontSize": 30,
+              "fontWeight": 700,
+              "color": "#e6edf3",
+              "align": "left",
+              "fontFamily": "JetBrains Mono, monospace"
+            },
+            {
+              "type": "text",
+              "text": "encode",
+              "x": 1166,
+              "y": 640,
+              "fontSize": 30,
+              "fontWeight": 700,
+              "color": "#e6edf3",
+              "align": "left",
+              "fontFamily": "JetBrains Mono, monospace"
+            },
+            {
+              "type": "text",
+              "text": "mux",
+              "x": 1490,
+              "y": 640,
+              "fontSize": 30,
+              "fontWeight": 700,
+              "color": "#e6edf3",
+              "align": "left",
+              "fontFamily": "JetBrains Mono, monospace"
+            }
+          ]
+        },
+        {
+          "type": "group",
+          "id": "stage-arrows",
+          "animation": {
+            "enter": "fade",
+            "duration": 0.4,
+            "delay": 0.75,
+            "stagger": {
+              "each": 0.14,
+              "from": "first"
+            }
+          },
+          "children": [
+            {
+              "type": "rect",
+              "x": 470,
+              "y": 656,
+              "width": 8,
+              "height": 4,
+              "radius": 2,
+              "fill": "#58a6ff"
+            },
+            {
+              "type": "rect",
+              "x": 794,
+              "y": 656,
+              "width": 8,
+              "height": 4,
+              "radius": 2,
+              "fill": "#58a6ff"
+            },
+            {
+              "type": "rect",
+              "x": 1118,
+              "y": 656,
+              "width": 8,
+              "height": 4,
+              "radius": 2,
+              "fill": "#58a6ff"
+            },
+            {
+              "type": "rect",
+              "x": 1442,
+              "y": 656,
+              "width": 8,
+              "height": 4,
+              "radius": 2,
+              "fill": "#58a6ff"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "packages",
+      "duration": 10.1,
+      "transition": {
+        "kind": "cross-fade",
+        "duration": 0.4
+      },
+      "narration": "Nine packages carry that: core, renderer canvas, motion, layer code, encoder ffmpeg, audio, layer captions, cli, and claude.",
+      "layers": [
+        {
+          "type": "rect",
+          "x": 140,
+          "y": 180,
+          "width": 96,
+          "height": 6,
+          "radius": 3,
+          "fill": "#58a6ff",
+          "animation": {
+            "enter": "slide-right",
+            "duration": 0.5
+          }
+        },
+        {
+          "type": "text",
+          "text": "THE MONOREPO",
+          "x": 140,
+          "y": 224,
+          "fontSize": 28,
+          "fontWeight": 700,
+          "color": "#58a6ff",
+          "align": "left",
+          "animation": {
+            "enter": "fade",
+            "duration": 0.4
+          }
+        },
+        {
+          "type": "text",
+          "text": "Nine packages, one contract.",
+          "x": 140,
+          "y": 278,
+          "fontSize": 64,
+          "fontWeight": 700,
+          "color": "#e6edf3",
+          "align": "left",
+          "animation": {
+            "enter": "fade-up",
+            "duration": 0.6,
+            "easing": "ease-out-cubic"
+          }
+        },
+        {
+          "type": "group",
+          "id": "pkg-cards",
+          "animation": {
+            "enter": "scale-fade",
+            "duration": 0.45,
+            "delay": 0.5,
+            "easing": "ease-out-cubic",
+            "stagger": {
+              "each": 0.09,
+              "from": "first"
+            }
+          },
+          "children": [
+            {
+              "type": "rect",
+              "x": 230,
+              "y": 450,
+              "width": 460,
+              "height": 96,
+              "radius": 14,
+              "fill": "#111823",
+              "stroke": "#1f2a37",
+              "strokeWidth": 2
+            },
+            {
+              "type": "rect",
+              "x": 730,
+              "y": 450,
+              "width": 460,
+              "height": 96,
+              "radius": 14,
+              "fill": "#111823",
+              "stroke": "#1f2a37",
+              "strokeWidth": 2
+            },
+            {
+              "type": "rect",
+              "x": 1230,
+              "y": 450,
+              "width": 460,
+              "height": 96,
+              "radius": 14,
+              "fill": "#111823",
+              "stroke": "#1f2a37",
+              "strokeWidth": 2
+            },
+            {
+              "type": "rect",
+              "x": 230,
+              "y": 574,
+              "width": 460,
+              "height": 96,
+              "radius": 14,
+              "fill": "#111823",
+              "stroke": "#1f2a37",
+              "strokeWidth": 2
+            },
+            {
+              "type": "rect",
+              "x": 730,
+              "y": 574,
+              "width": 460,
+              "height": 96,
+              "radius": 14,
+              "fill": "#111823",
+              "stroke": "#1f2a37",
+              "strokeWidth": 2
+            },
+            {
+              "type": "rect",
+              "x": 1230,
+              "y": 574,
+              "width": 460,
+              "height": 96,
+              "radius": 14,
+              "fill": "#111823",
+              "stroke": "#1f2a37",
+              "strokeWidth": 2
+            },
+            {
+              "type": "rect",
+              "x": 230,
+              "y": 698,
+              "width": 460,
+              "height": 96,
+              "radius": 14,
+              "fill": "#111823",
+              "stroke": "#1f2a37",
+              "strokeWidth": 2
+            },
+            {
+              "type": "rect",
+              "x": 730,
+              "y": 698,
+              "width": 460,
+              "height": 96,
+              "radius": 14,
+              "fill": "#111823",
+              "stroke": "#1f2a37",
+              "strokeWidth": 2
+            },
+            {
+              "type": "rect",
+              "x": 1230,
+              "y": 698,
+              "width": 460,
+              "height": 96,
+              "radius": 14,
+              "fill": "#111823",
+              "stroke": "#1f2a37",
+              "strokeWidth": 2
+            }
+          ]
+        },
+        {
+          "type": "group",
+          "id": "pkg-labels",
+          "animation": {
+            "enter": "scale-fade",
+            "duration": 0.45,
+            "delay": 0.5,
+            "easing": "ease-out-cubic",
+            "stagger": {
+              "each": 0.09,
+              "from": "first"
+            }
+          },
+          "children": [
+            {
+              "type": "text",
+              "text": "core",
+              "x": 266,
+              "y": 480,
+              "fontSize": 30,
+              "fontWeight": 400,
+              "color": "#e6edf3",
+              "align": "left",
+              "fontFamily": "JetBrains Mono, monospace"
+            },
+            {
+              "type": "text",
+              "text": "renderer-canvas",
+              "x": 766,
+              "y": 480,
+              "fontSize": 30,
+              "fontWeight": 400,
+              "color": "#e6edf3",
+              "align": "left",
+              "fontFamily": "JetBrains Mono, monospace"
+            },
+            {
+              "type": "text",
+              "text": "motion",
+              "x": 1266,
+              "y": 480,
+              "fontSize": 30,
+              "fontWeight": 400,
+              "color": "#e6edf3",
+              "align": "left",
+              "fontFamily": "JetBrains Mono, monospace"
+            },
+            {
+              "type": "text",
+              "text": "layer-code",
+              "x": 266,
+              "y": 604,
+              "fontSize": 30,
+              "fontWeight": 400,
+              "color": "#e6edf3",
+              "align": "left",
+              "fontFamily": "JetBrains Mono, monospace"
+            },
+            {
+              "type": "text",
+              "text": "encoder-ffmpeg",
+              "x": 766,
+              "y": 604,
+              "fontSize": 30,
+              "fontWeight": 400,
+              "color": "#e6edf3",
+              "align": "left",
+              "fontFamily": "JetBrains Mono, monospace"
+            },
+            {
+              "type": "text",
+              "text": "audio",
+              "x": 1266,
+              "y": 604,
+              "fontSize": 30,
+              "fontWeight": 400,
+              "color": "#e6edf3",
+              "align": "left",
+              "fontFamily": "JetBrains Mono, monospace"
+            },
+            {
+              "type": "text",
+              "text": "layer-captions",
+              "x": 266,
+              "y": 728,
+              "fontSize": 30,
+              "fontWeight": 400,
+              "color": "#e6edf3",
+              "align": "left",
+              "fontFamily": "JetBrains Mono, monospace"
+            },
+            {
+              "type": "text",
+              "text": "cli",
+              "x": 766,
+              "y": 728,
+              "fontSize": 30,
+              "fontWeight": 400,
+              "color": "#e6edf3",
+              "align": "left",
+              "fontFamily": "JetBrains Mono, monospace"
+            },
+            {
+              "type": "text",
+              "text": "claude",
+              "x": 1266,
+              "y": 728,
+              "fontSize": 30,
+              "fontWeight": 400,
+              "color": "#e6edf3",
+              "align": "left",
+              "fontFamily": "JetBrains Mono, monospace"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "renderer",
+      "duration": 9.8,
+      "transition": {
+        "kind": "cross-fade",
+        "duration": 0.4
+      },
+      "narration": "The renderer paints onto a native canvas and caches every raster by content hash. Text is laid out once, not once per frame.",
+      "layers": [
+        {
+          "type": "rect",
+          "x": 140,
+          "y": 250,
+          "width": 96,
+          "height": 6,
+          "radius": 3,
+          "fill": "#58a6ff",
+          "animation": {
+            "enter": "slide-right",
+            "duration": 0.5
+          }
+        },
+        {
+          "type": "text",
+          "text": "THE RENDERER",
+          "x": 140,
+          "y": 294,
+          "fontSize": 28,
+          "fontWeight": 700,
+          "color": "#58a6ff",
+          "align": "left",
+          "animation": {
+            "enter": "fade",
+            "duration": 0.4
+          }
+        },
+        {
+          "type": "text",
+          "text": "Painted once. Cached by content hash.",
+          "x": 140,
+          "y": 350,
+          "fontSize": 68,
+          "fontWeight": 700,
+          "color": "#e6edf3",
+          "align": "left",
+          "maxWidth": 1600,
+          "animation": {
+            "enter": "fade-up",
+            "duration": 0.6,
+            "easing": "ease-out-cubic"
+          }
+        },
+        {
+          "type": "group",
+          "id": "renderer-dots",
+          "animation": {
+            "enter": "fade",
+            "duration": 0.4,
+            "delay": 0.5,
+            "stagger": {
+              "each": 0.16,
+              "from": "first"
+            }
+          },
+          "children": [
+            {
+              "type": "rect",
+              "x": 142,
+              "y": 570,
+              "width": 14,
+              "height": 14,
+              "radius": 7,
+              "fill": "#58a6ff"
+            },
+            {
+              "type": "rect",
+              "x": 142,
+              "y": 660,
+              "width": 14,
+              "height": 14,
+              "radius": 7,
+              "fill": "#58a6ff"
+            },
+            {
+              "type": "rect",
+              "x": 142,
+              "y": 750,
+              "width": 14,
+              "height": 14,
+              "radius": 7,
+              "fill": "#58a6ff"
+            }
+          ]
+        },
+        {
+          "type": "group",
+          "id": "renderer-bullets",
+          "animation": {
+            "enter": "slide-right",
+            "duration": 0.5,
+            "delay": 0.5,
+            "easing": "ease-out-cubic",
+            "stagger": {
+              "each": 0.16,
+              "from": "first"
+            }
+          },
+          "children": [
+            {
+              "type": "text",
+              "text": "@napi-rs/canvas, raw RGBA pixel buffers",
+              "x": 190,
+              "y": 556,
+              "fontSize": 38,
+              "fontWeight": 400,
+              "color": "#c9d1d9",
+              "align": "left"
+            },
+            {
+              "type": "text",
+              "text": "Text measured and wrapped once, never per frame",
+              "x": 190,
+              "y": 646,
+              "fontSize": 38,
+              "fontWeight": 400,
+              "color": "#c9d1d9",
+              "align": "left"
+            },
+            {
+              "type": "text",
+              "text": "Hold frames reuse the previous buffer",
+              "x": 190,
+              "y": 736,
+              "fontSize": 38,
+              "fontWeight": 400,
+              "color": "#c9d1d9",
+              "align": "left"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "determinism",
+      "duration": 7.85,
+      "transition": {
+        "kind": "cross-fade",
+        "duration": 0.4
+      },
+      "narration": "The same spec always produces byte identical frames, which makes golden tests possible for a renderer.",
+      "layers": [
+        {
+          "type": "text",
+          "text": "Same spec in.",
+          "x": 660,
+          "y": 380,
+          "fontSize": 88,
+          "fontWeight": 700,
+          "color": "#e6edf3",
+          "align": "center",
+          "animation": {
+            "enter": "fade-up",
+            "duration": 0.6,
+            "easing": "ease-out-cubic"
+          }
+        },
+        {
+          "type": "text",
+          "text": "Byte-identical frames out.",
+          "x": 399,
+          "y": 500,
+          "fontSize": 88,
+          "fontWeight": 700,
+          "color": "#58a6ff",
+          "align": "center",
+          "animation": {
+            "enter": "fade-up",
+            "duration": 0.6,
+            "delay": 0.3,
+            "easing": "ease-out-cubic"
+          }
+        },
+        {
+          "type": "rect",
+          "x": 900,
+          "y": 650,
+          "width": 120,
+          "height": 4,
+          "radius": 2,
+          "fill": "#1f2a37",
+          "animation": {
+            "enter": "fade",
+            "duration": 0.5,
+            "delay": 0.6
+          }
+        },
+        {
+          "type": "text",
+          "text": "Golden tests, for a video renderer.",
+          "x": 654,
+          "y": 700,
+          "fontSize": 38,
+          "fontWeight": 400,
+          "color": "#8b949e",
+          "align": "center",
+          "animation": {
+            "enter": "fade",
+            "duration": 0.6,
+            "delay": 0.7
+          }
+        }
+      ]
+    },
+    {
+      "id": "motion",
+      "duration": 9.25,
+      "transition": {
+        "kind": "cross-fade",
+        "duration": 0.4
+      },
+      "narration": "Motion is data too. Named presets compile to property tracks, with easing curves, springs, and deterministic stagger.",
+      "layers": [
+        {
+          "type": "rect",
+          "x": 140,
+          "y": 200,
+          "width": 96,
+          "height": 6,
+          "radius": 3,
+          "fill": "#58a6ff",
+          "animation": {
+            "enter": "slide-right",
+            "duration": 0.5
+          }
+        },
+        {
+          "type": "text",
+          "text": "MOTION",
+          "x": 140,
+          "y": 244,
+          "fontSize": 28,
+          "fontWeight": 700,
+          "color": "#58a6ff",
+          "align": "left",
+          "animation": {
+            "enter": "fade",
+            "duration": 0.4
+          }
+        },
+        {
+          "type": "text",
+          "text": "Presets compile to property tracks.",
+          "x": 140,
+          "y": 298,
+          "fontSize": 64,
+          "fontWeight": 700,
+          "color": "#e6edf3",
+          "align": "left",
+          "maxWidth": 1600,
+          "animation": {
+            "enter": "fade-up",
+            "duration": 0.6,
+            "easing": "ease-out-cubic"
+          }
+        },
+        {
+          "type": "code",
+          "code": "{\n  \"animation\": {\n    \"enter\": \"fade-up\",\n    \"duration\": 0.5,\n    \"easing\": \"ease-out-cubic\",\n    \"stagger\": { \"each\": 0.12, \"from\": \"first\" }\n  }\n}",
+          "lang": "json",
+          "theme": "github-dark",
+          "title": "animation",
+          "x": 360,
+          "y": 450,
+          "width": 1200,
+          "height": 440,
+          "fontSize": 28,
+          "showLineNumbers": false,
+          "animation": {
+            "enter": "scale-fade",
+            "duration": 0.55,
+            "delay": 0.3
+          }
+        },
+        {
+          "type": "text",
+          "text": "fade  \u00b7  fade-up  \u00b7  fade-down  \u00b7  slide-*  \u00b7  scale-fade  \u00b7  pop",
+          "x": 375,
+          "y": 910,
+          "fontSize": 30,
+          "fontWeight": 400,
+          "color": "#8b949e",
+          "align": "center",
+          "fontFamily": "JetBrains Mono, monospace",
+          "animation": {
+            "enter": "fade",
+            "duration": 0.6,
+            "delay": 0.8
+          }
+        }
+      ]
+    },
+    {
+      "id": "codelayer",
+      "duration": 9.5,
+      "transition": {
+        "kind": "cross-fade",
+        "duration": 0.4
+      },
+      "narration": "Code is tokenized by Shiki ahead of time and cached per line, so a typewriter reveal re-rasterizes one line, not the whole block.",
+      "layers": [
+        {
+          "type": "rect",
+          "x": 140,
+          "y": 210,
+          "width": 96,
+          "height": 6,
+          "radius": 3,
+          "fill": "#58a6ff",
+          "animation": {
+            "enter": "slide-right",
+            "duration": 0.5
+          }
+        },
+        {
+          "type": "text",
+          "text": "THE CODE LAYER",
+          "x": 140,
+          "y": 254,
+          "fontSize": 28,
+          "fontWeight": 700,
+          "color": "#58a6ff",
+          "align": "left",
+          "animation": {
+            "enter": "fade",
+            "duration": 0.4
+          }
+        },
+        {
+          "type": "text",
+          "text": "Shiki up front. Cached per line.",
+          "x": 140,
+          "y": 308,
+          "fontSize": 64,
+          "fontWeight": 700,
+          "color": "#e6edf3",
+          "align": "left",
+          "maxWidth": 1600,
+          "animation": {
+            "enter": "fade-up",
+            "duration": 0.6,
+            "easing": "ease-out-cubic"
+          }
+        },
+        {
+          "type": "code",
+          "code": "const bitmap = cache.getOrRender(lineKey, w, h, (ctx) => {\n  for (const token of tokens) {\n    ctx.fillStyle = token.color;\n    ctx.fillText(token.text, x, 0);\n    x += measureLine(token.text, fontSize);\n  }\n});",
+          "lang": "typescript",
+          "theme": "github-dark",
+          "title": "packages/layer-code/src/render.ts",
+          "x": 310,
+          "y": 460,
+          "width": 1300,
+          "height": 360,
+          "fontSize": 24,
+          "showLineNumbers": true,
+          "reveal": {
+            "mode": "typewriter",
+            "unit": "line",
+            "rate": 1.6,
+            "startDelay": 0.9,
+            "caret": true
+          },
+          "animation": {
+            "enter": "fade",
+            "duration": 0.5,
+            "delay": 0.3
+          }
+        }
+      ]
+    },
+    {
+      "id": "encoder",
+      "duration": 8.35,
+      "transition": {
+        "kind": "cross-fade",
+        "duration": 0.4
+      },
+      "narration": "Frames stream as raw pixels down a single pipe into FFmpeg, hardware encoded through VideoToolbox.",
+      "layers": [
+        {
+          "type": "rect",
+          "x": 140,
+          "y": 240,
+          "width": 96,
+          "height": 6,
+          "radius": 3,
+          "fill": "#58a6ff",
+          "animation": {
+            "enter": "slide-right",
+            "duration": 0.5
+          }
+        },
+        {
+          "type": "text",
+          "text": "THE ENCODER",
+          "x": 140,
+          "y": 284,
+          "fontSize": 28,
+          "fontWeight": 700,
+          "color": "#58a6ff",
+          "align": "left",
+          "animation": {
+            "enter": "fade",
+            "duration": 0.4
+          }
+        },
+        {
+          "type": "text",
+          "text": "One pipe into FFmpeg.",
+          "x": 140,
+          "y": 338,
+          "fontSize": 68,
+          "fontWeight": 700,
+          "color": "#e6edf3",
+          "align": "left",
+          "animation": {
+            "enter": "fade-up",
+            "duration": 0.6,
+            "easing": "ease-out-cubic"
+          }
+        },
+        {
+          "type": "code",
+          "code": "ffmpeg -y -f rawvideo -pix_fmt rgba -s 1920x1080 -r 30 -i - \\\n  -fps_mode passthrough -pix_fmt yuv420p \\\n  -color_primaries bt709 -color_trc bt709 -colorspace bt709 \\\n  -c:v h264_videotoolbox -b:v 12000k \\\n  -movflags +faststart out.mp4",
+          "lang": "bash",
+          "theme": "github-dark",
+          "title": "packages/encoder-ffmpeg/src/argv.ts",
+          "x": 260,
+          "y": 500,
+          "width": 1400,
+          "height": 290,
+          "fontSize": 24,
+          "showLineNumbers": false,
+          "animation": {
+            "enter": "scale-fade",
+            "duration": 0.55,
+            "delay": 0.3
+          }
+        }
+      ]
+    },
+    {
+      "id": "audio",
+      "duration": 10.4,
+      "transition": {
+        "kind": "cross-fade",
+        "duration": 0.4
+      },
+      "narration": "Narration is synthesized locally with Kokoro, and the measured duration feeds back into the timeline, so a scene can just say duration auto.",
+      "layers": [
+        {
+          "type": "rect",
+          "x": 140,
+          "y": 210,
+          "width": 96,
+          "height": 6,
+          "radius": 3,
+          "fill": "#58a6ff",
+          "animation": {
+            "enter": "slide-right",
+            "duration": 0.5
+          }
+        },
+        {
+          "type": "text",
+          "text": "VOICEOVER",
+          "x": 140,
+          "y": 254,
+          "fontSize": 28,
+          "fontWeight": 700,
+          "color": "#58a6ff",
+          "align": "left",
+          "animation": {
+            "enter": "fade",
+            "duration": 0.4
+          }
+        },
+        {
+          "type": "text",
+          "text": "Kokoro speaks. The timeline listens.",
+          "x": 140,
+          "y": 308,
+          "fontSize": 64,
+          "fontWeight": 700,
+          "color": "#e6edf3",
+          "align": "left",
+          "maxWidth": 1600,
+          "animation": {
+            "enter": "fade-up",
+            "duration": 0.6,
+            "easing": "ease-out-cubic"
+          }
+        },
+        {
+          "type": "code",
+          "code": "{\n  \"id\": \"audio\",\n  \"duration\": \"auto\",\n  \"narration\": \"Kokoro synthesizes this line locally.\",\n  \"layers\": []\n}",
+          "lang": "json",
+          "theme": "github-dark",
+          "title": "scene",
+          "x": 310,
+          "y": 460,
+          "width": 1300,
+          "height": 360,
+          "fontSize": 28,
+          "showLineNumbers": false,
+          "animation": {
+            "enter": "scale-fade",
+            "duration": 0.55,
+            "delay": 0.3
+          }
+        },
+        {
+          "type": "text",
+          "text": "Measured audio length sets the scene length. No guessing.",
+          "x": 512,
+          "y": 880,
+          "fontSize": 32,
+          "fontWeight": 400,
+          "color": "#8b949e",
+          "align": "center",
+          "animation": {
+            "enter": "fade",
+            "duration": 0.6,
+            "delay": 0.9
+          }
+        }
+      ]
+    },
+    {
+      "id": "captions",
+      "duration": 6.2,
+      "transition": {
+        "kind": "cross-fade",
+        "duration": 0.4
+      },
+      "narration": "Whisper force aligns the words, so the pipeline writes the captions layer itself.",
+      "layers": [
+        {
+          "type": "rect",
+          "x": 140,
+          "y": 340,
+          "width": 96,
+          "height": 6,
+          "radius": 3,
+          "fill": "#58a6ff",
+          "animation": {
+            "enter": "slide-right",
+            "duration": 0.5
+          }
+        },
+        {
+          "type": "text",
+          "text": "CAPTIONS",
+          "x": 140,
+          "y": 384,
+          "fontSize": 28,
+          "fontWeight": 700,
+          "color": "#58a6ff",
+          "align": "left",
+          "animation": {
+            "enter": "fade",
+            "duration": 0.4
+          }
+        },
+        {
+          "type": "text",
+          "text": "Force-aligned, never hand-written.",
+          "x": 140,
+          "y": 440,
+          "fontSize": 72,
+          "fontWeight": 700,
+          "color": "#e6edf3",
+          "align": "left",
+          "maxWidth": 1560,
+          "animation": {
+            "enter": "fade-up",
+            "duration": 0.6,
+            "easing": "ease-out-cubic"
+          }
+        },
+        {
+          "type": "text",
+          "text": "whisper.cpp aligns every word against the reference transcript, and the render pipeline inserts the captions layer itself.",
+          "x": 140,
+          "y": 620,
+          "fontSize": 36,
+          "fontWeight": 400,
+          "color": "#8b949e",
+          "align": "left",
+          "maxWidth": 1500,
+          "lineHeight": 1.45,
+          "animation": {
+            "enter": "fade-up",
+            "duration": 0.6,
+            "delay": 0.25
+          }
+        }
+      ]
+    },
+    {
+      "id": "cli",
+      "duration": 7.1,
+      "transition": {
+        "kind": "cross-fade",
+        "duration": 0.4
+      },
+      "narration": "One CLI drives all of it: init, validate, preview, render, generate, and batch.",
+      "layers": [
+        {
+          "type": "rect",
+          "x": 140,
+          "y": 230,
+          "width": 96,
+          "height": 6,
+          "radius": 3,
+          "fill": "#58a6ff",
+          "animation": {
+            "enter": "slide-right",
+            "duration": 0.5
+          }
+        },
+        {
+          "type": "text",
+          "text": "THE CLI",
+          "x": 140,
+          "y": 274,
+          "fontSize": 28,
+          "fontWeight": 700,
+          "color": "#58a6ff",
+          "align": "left",
+          "animation": {
+            "enter": "fade",
+            "duration": 0.4
+          }
+        },
+        {
+          "type": "text",
+          "text": "One command per stage.",
+          "x": 140,
+          "y": 328,
+          "fontSize": 68,
+          "fontWeight": 700,
+          "color": "#e6edf3",
+          "align": "left",
+          "animation": {
+            "enter": "fade-up",
+            "duration": 0.6,
+            "easing": "ease-out-cubic"
+          }
+        },
+        {
+          "type": "code",
+          "code": "claudevid init\nclaudevid validate spec.json\nclaudevid preview spec.json --watch\nclaudevid render spec.json --out video.mp4 --captions\nclaudevid generate \"explain the timeline compiler\"\nclaudevid batch ./jobs --concurrency 4",
+          "lang": "bash",
+          "theme": "github-dark",
+          "title": "claudevid",
+          "x": 360,
+          "y": 490,
+          "width": 1200,
+          "height": 340,
+          "fontSize": 26,
+          "showLineNumbers": false,
+          "animation": {
+            "enter": "scale-fade",
+            "duration": 0.55,
+            "delay": 0.3
+          }
+        }
+      ]
+    },
+    {
+      "id": "outro",
+      "duration": 6.4,
+      "transition": {
+        "kind": "cross-fade",
+        "duration": 0.4
+      },
+      "narration": "This video is a VideoSpec. Claude wrote the JSON. The pipeline did the rest.",
+      "layers": [
+        {
+          "type": "text",
+          "text": "claudevid",
+          "x": 674,
+          "y": 360,
+          "fontSize": 120,
+          "fontWeight": 700,
+          "color": "#e6edf3",
+          "align": "center",
+          "animation": {
+            "enter": "fade-up",
+            "duration": 0.7,
+            "easing": "ease-out-cubic"
+          }
+        },
+        {
+          "type": "rect",
+          "x": 900,
+          "y": 540,
+          "width": 120,
+          "height": 6,
+          "radius": 3,
+          "fill": "#58a6ff",
+          "animation": {
+            "enter": "fade",
+            "duration": 0.6,
+            "delay": 0.3
+          }
+        },
+        {
+          "type": "text",
+          "text": "This video is a VideoSpec.",
+          "x": 673,
+          "y": 610,
+          "fontSize": 46,
+          "fontWeight": 400,
+          "color": "#e6edf3",
+          "align": "center",
+          "animation": {
+            "enter": "fade-up",
+            "duration": 0.6,
+            "delay": 0.45
+          }
+        },
+        {
+          "type": "text",
+          "text": "Claude wrote the JSON. The pipeline did the rest.",
+          "x": 563,
+          "y": 700,
+          "fontSize": 34,
+          "fontWeight": 400,
+          "color": "#8b949e",
+          "align": "center",
+          "animation": {
+            "enter": "fade",
+            "duration": 0.6,
+            "delay": 0.7
+          }
+        }
+      ]
+    }
+  ]
+}
