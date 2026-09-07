@@ -39,7 +39,7 @@ the gated live-model integration test and the full-workspace regression pass. No
 
 ### Wave 2 — cache-root, models, tts (independent of each other)
 
-- [ ] `T3` — `cache-root.ts`: shared cache-root resolution helper
+- [x] `T3` — `cache-root.ts`: shared cache-root resolution helper
   - Files: `packages/audio/src/cache-root.ts`
   - Estimate: small
   - Kind: impl
@@ -48,7 +48,7 @@ the gated live-model integration test and the full-workspace regression pass. No
     to the project root; both `cache.ts` (T5) and `models.ts` (T4) call it — neither hardcodes a
     path independently.
 
-- [ ] `T4` — `models.ts`: pinned model URL+digest, install command, verify-on-load
+- [x] `T4` — `models.ts`: pinned model URL+digest, install command, verify-on-load
   - Files: `packages/audio/src/models.ts`
   - Estimate: medium
   - Kind: impl
@@ -59,7 +59,7 @@ the gated live-model integration test and the full-workspace regression pass. No
     re-download) on mismatch. Network access confined to `installModels()` — nothing else in
     this package makes a network call.
 
-- [ ] `T5` — `tts.ts`: `synthesize()` — Kokoro backend + injectable seam
+- [x] `T5` — `tts.ts`: `synthesize()` — Kokoro backend + injectable seam
   - Files: `packages/audio/src/tts.ts`
   - Estimate: medium
   - Kind: impl
@@ -73,7 +73,7 @@ the gated live-model integration test and the full-workspace regression pass. No
 
 ### Wave 3 — cache.ts, durations.ts + their tests
 
-- [ ] `T6` — `cache.ts`: content-hash cache over the full `SynthesisRequest`, atomic writes
+- [x] `T6` — `cache.ts`: content-hash cache over the full `SynthesisRequest`, atomic writes
   - Files: `packages/audio/src/cache.ts`, `packages/audio/test/cache.test.ts`
   - Estimate: medium
   - Kind: impl
@@ -86,7 +86,7 @@ the gated live-model integration test and the full-workspace regression pass. No
     final path — a reader sees either nothing or a complete entry, never partial. Test file
     covers AC3–AC6 entirely via a fixture `synthesize`, zero real model.
 
-- [ ] `T7` — `durations.ts`: `computeAudioDurations()` + its tests
+- [x] `T7` — `durations.ts`: `computeAudioDurations()` + its tests
   - Files: `packages/audio/src/durations.ts`, `packages/audio/test/durations.test.ts`
   - Estimate: medium
   - Kind: impl
@@ -104,7 +104,7 @@ the gated live-model integration test and the full-workspace regression pass. No
 
 ### Wave 4 — gated integration test + full-workspace regression
 
-- [ ] `T8` — Live-model integration test (gated) + workspace-wide build/test/lint pass
+- [x] `T8` — Live-model integration test (gated) + workspace-wide build/test/lint pass
   - Files: `packages/audio/test/tts.live.test.ts`
   - Estimate: medium
   - Kind: test

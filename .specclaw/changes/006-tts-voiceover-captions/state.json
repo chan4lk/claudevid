@@ -7,6 +7,6 @@
     "spec": {"status":"done","at":"2026-09-07T08:07:46Z"},
     "design": {"status":"done","at":"2026-09-07T08:08:28Z"},
     "tasks": {"status":"done","at":"2026-09-07T08:09:05Z"},
-    "build": {"status":"in-progress","at":"2026-09-07T08:09:24Z"}
+    "build": {"status":"failed","at":"2026-09-07T08:32:04Z","tasks":{"done":8,"total":8,"failed":0}}
   }
 }
