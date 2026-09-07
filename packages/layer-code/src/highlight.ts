@@ -31,6 +31,7 @@ import githubDarkHighContrastTheme from "shiki/themes/github-dark-high-contrast.
 
 import type { Diagnostic, Timeline, VideoSpec } from "@claudevid/core";
 import { BUNDLED_LANGS, BUNDLED_THEMES, type CodeLayer } from "./schema.js";
+import { unsupportedLangDiagnostic, unsupportedThemeDiagnostic } from "./diagnostics.js";
 
 export interface Token {
   text: string;
@@ -98,22 +99,6 @@ function isBundledLang(lang: string): lang is (typeof BUNDLED_LANGS)[number] {
 
 function isBundledTheme(theme: string): theme is (typeof BUNDLED_THEMES)[number] {
   return (BUNDLED_THEMES as readonly string[]).includes(theme);
-}
-
-function unsupportedLangDiagnostic(layerKey: string, lang: string): Diagnostic {
-  return {
-    path: `/${layerKey}/lang`,
-    message: `unsupported language "${lang}"`,
-    suggestion: `use one of the bundled languages: ${BUNDLED_LANGS.join(", ")}`,
-  };
-}
-
-function unsupportedThemeDiagnostic(layerKey: string, theme: string): Diagnostic {
-  return {
-    path: `/${layerKey}/theme`,
-    message: `unsupported theme "${theme}"`,
-    suggestion: `use one of the bundled themes: ${BUNDLED_THEMES.join(", ")}`,
-  };
 }
 
 // `core.Layer` (`packages/core/src/layers.ts`) is a closed static union with no "code" member —
