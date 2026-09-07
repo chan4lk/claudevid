@@ -21,7 +21,16 @@
     "@claudevid/layer-code": "workspace:*",
     "@claudevid/layer-captions": "workspace:*",
     "@claudevid/bench": "workspace:*",
-    "@napi-rs/canvas": "^1.0.8"
+    "@anthropic-ai/sdk": "^0.124.0",
+    "@fontsource/inter": "^5.3.0",
+    "@fontsource/jetbrains-mono": "^5.3.0",
+    "@huggingface/transformers": "^3.8.1",
+    "@napi-rs/canvas": "^1.0.8",
+    "kokoro-js": "^1.2.0",
+    "onnxruntime-node": "^1.19.0",
+    "shiki": "^4.4.3",
+    "zod": "^3.23.8",
+    "zod-to-json-schema": "^3.23.5"
   },
   "devDependencies": {
     "@types/node": "^22.7.4",

@@ -75,6 +75,9 @@ importers:
 
   packages/cli:
     dependencies:
+      '@anthropic-ai/sdk':
+        specifier: ^0.124.0
+        version: 0.124.0(zod@3.25.76)
       '@claudevid/audio':
         specifier: workspace:*
         version: link:../audio
@@ -102,9 +105,33 @@ importers:
       '@claudevid/renderer-canvas':
         specifier: workspace:*
         version: link:../renderer-canvas
+      '@fontsource/inter':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@fontsource/jetbrains-mono':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@huggingface/transformers':
+        specifier: ^3.8.1
+        version: 3.8.1
       '@napi-rs/canvas':
         specifier: ^1.0.8
         version: 1.0.8
+      kokoro-js:
+        specifier: ^1.2.0
+        version: 1.2.1
+      onnxruntime-node:
+        specifier: ^1.19.0
+        version: 1.29.0
+      shiki:
+        specifier: ^4.4.3
+        version: 4.4.3
+      zod:
+        specifier: ^3.23.8
+        version: 3.25.76
+      zod-to-json-schema:
+        specifier: ^3.23.5
+        version: 3.25.2(zod@3.25.76)
     devDependencies:
       '@types/node':
         specifier: ^22.7.4

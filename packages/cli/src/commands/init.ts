@@ -50,6 +50,31 @@ export function runInit(opts: InitOptions, deps: InitDeps): void {
   deps.writeFile(join(deps.cwd, "specs", "example.json"), exampleSpecContent);
 }
 
+/** Locates the `templates/` directory relative to this bundle's own installed location — never
+ * `process.cwd()`, since the CLI runs from an arbitrary user project directory.
+ *
+ * Two layouts have to work, so the depth cannot be hardcoded. In this monorepo the bundle sits
+ * at `packages/cli/dist/cli.js` and `templates/` is three levels up at the repo root; in the
+ * published package the bundle sits at `dist/cli.js` with `templates/` one level up beside it.
+ * Both candidates are probed in order and the first that actually exists wins, so a packaged
+ * install doesn't silently resolve to a path outside the package.
+ */
+function resolveTemplatesDir(): string {
+  const here = dirname(fileURLToPath(import.meta.url));
+  const candidates = [
+    resolve(here, "../templates"), // published package: <pkg>/dist/cli.js -> <pkg>/templates
+    resolve(here, "../../../templates"), // this monorepo: packages/cli/dist/cli.js -> <root>/templates
+  ];
+  const found = candidates.find((candidate) => existsSync(candidate));
+  if (!found) {
+    throw new Error(
+      `Could not locate the templates/ directory. Looked in:\n  ${candidates.join("\n  ")}\n` +
+        "This usually means the claudevid package was installed without its templates/ directory.",
+    );
+  }
+  return found;
+}
+
 /**
  * Real (non-DI) entry point. Resolves the actual `templates/` source paths relative to this
  * package's own installed location (via `import.meta.url` — never `process.cwd()`, since the CLI
@@ -58,9 +83,7 @@ export function runInit(opts: InitOptions, deps: InitDeps): void {
  */
 export function runInitFromCli(argv: string[]): void {
   const force = hasFlag(argv, "--force");
-  // packages/cli/dist/cli.js -> repo-root/templates (tsup bundles this package to a single
-  // dist/cli.js, so import.meta.url here resolves to that bundled file's location at runtime).
-  const templatesDir = resolve(dirname(fileURLToPath(import.meta.url)), "../../../templates");
+  const templatesDir = resolveTemplatesDir();
 
   const deps: InitDeps = {
     cwd: process.cwd(),

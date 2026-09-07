@@ -6,22 +6,26 @@
 // against the documented `<15/<10/<5`min targets SCALED to the reference spec's own (short)
 // duration (design.md's `report()` description).
 //
-// Invoked directly — `pnpm --filter @claudevid/bench bench` (design.md D7) — or imported as a
-// library and called via its exported `runBench(argv)` (change 007's `packages/cli/src/commands/
-// bench.ts`). The self-invoking `main()` below is gated on this module being the actual entry
-// script (`isDirectRun`), not merely imported — otherwise every `claudevid <anything>` invocation
-// would also run a real bench pass as a side effect of statically importing `@claudevid/bench`.
+// Imported as a library (`claudevid bench`, via `@claudevid/bench`) or driven by this package's
+// own `main.ts` entry point (`pnpm --filter @claudevid/bench bench`, design.md D7). This module
+// is deliberately side-effect-free: argv parsing and process-exit handling live in `main.ts`.
+//
+// That split exists because a bundler defeats the alternative. This file previously self-invoked
+// behind an `isDirectRun` guard comparing `import.meta.url` against `process.argv[1]`, which
+// correctly distinguishes "run directly" from "imported" — but not "inlined into someone else's
+// bundle". `packages/cli` inlines every workspace package into `dist/cli.js`, where
+// `import.meta.url` *is* argv[1], so the guard passed and every `claudevid <anything>` ran a
+// full bench pass. Keeping this module importable and inert is the fix.
 
 import { performance } from "node:perf_hooks";
 import * as path from "node:path";
-import { fileURLToPath } from "node:url";
 
 import { compileTimeline } from "@claudevid/core";
 import { createRenderer, createFrameBuffer } from "@claudevid/renderer-canvas";
 import { probe, createEncodePipe, createTempRun } from "@claudevid/encoder-ffmpeg";
 import type { ProgressEvent } from "@claudevid/encoder-ffmpeg";
 
-import { parseArgs, ArgError } from "./args.js";
+import { parseArgs } from "./args.js";
 import { referenceSpec } from "./reference-spec.js";
 
 /** The doc's stated targets (spec.md Overview/FR11) are for a 30-minute 1080p30 reference —
@@ -134,18 +138,4 @@ export async function runBench(argv: string[]): Promise<void> {
     renderer.dispose();
     await tempRun.cleanup();
   }
-}
-
-async function main(): Promise<void> {
-  await runBench(process.argv.slice(2));
-}
-
-const isDirectRun =
-  process.argv[1] !== undefined && fileURLToPath(import.meta.url) === path.resolve(process.argv[1]);
-
-if (isDirectRun) {
-  main().catch((err) => {
-    console.error(err instanceof ArgError ? `bench: ${err.message}` : err);
-    process.exitCode = 1;
-  });
 }
