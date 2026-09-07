@@ -17,8 +17,7 @@ regression check.
 ### Wave 1 — Core schema + timeline extensions
 
 - [ ] `T1` — Add `PropertyBag` type and `Animation.stagger`/`Scene.transition` fields to core
-  - Files: `packages/core/src/property-bag.ts` (create), `packages/core/src/layers.ts`,
-    `packages/core/src/schema.ts`, `packages/core/src/types.ts`, `packages/core/src/index.ts`
+  - Files: `packages/core/src/property-bag.ts` (create), `packages/core/src/layers.ts`, `packages/core/src/schema.ts`, `packages/core/src/types.ts`, `packages/core/src/index.ts`
   - Estimate: small
   - Kind: impl
   - Notes: `Animation.stagger?: { each: number; from?: "first"|"center"|"last"|"random" }`
@@ -51,8 +50,7 @@ regression check.
 ### Wave 2 — `@claudevid/motion` package (pure, no rendering)
 
 - [ ] `T4` — Package scaffolding + `properties.ts` (`Channel` union, cost table)
-  - Files: `packages/motion/package.json`, `tsup.config.ts`, `vitest.config.ts`,
-    `tsconfig.json`, `src/properties.ts`, `src/index.ts` (stub)
+  - Files: `packages/motion/package.json`, `tsup.config.ts`, `vitest.config.ts`, `tsconfig.json`, `src/properties.ts`, `src/index.ts` (stub)
   - Estimate: small
   - Kind: config
   - Depends: T1
@@ -102,8 +100,7 @@ regression check.
     file (NFR2).
 
 - [ ] `T9` — `compile.ts` + `resolver.ts`: `compileMotion`, `createResolver`
-  - Files: `packages/motion/src/compile.ts`, `packages/motion/src/resolver.ts`,
-    `packages/motion/src/index.ts` (finalize exports)
+  - Files: `packages/motion/src/compile.ts`, `packages/motion/src/resolver.ts`, `packages/motion/src/index.ts` (finalize exports)
   - Estimate: large
   - Kind: impl
   - Depends: T7, T8
@@ -115,8 +112,7 @@ regression check.
     Edge Cases), not a silent no-op. `createResolver` closes over each layer's `startFrame`.
 
 - [ ] `T10` — Motion package test suite
-  - Files: `packages/motion/test/track.test.ts`, `easing.test.ts`, `presets.test.ts`,
-    `stagger.test.ts`, `compile.test.ts`, `catalogue.test.ts`
+  - Files: `packages/motion/test/track.test.ts`, `easing.test.ts`, `presets.test.ts`, `stagger.test.ts`, `compile.test.ts`, `catalogue.test.ts`
   - Estimate: large
   - Kind: test
   - Depends: T9
@@ -132,8 +128,8 @@ regression check.
   - Files: `packages/renderer-canvas/src/index.ts`
   - Estimate: large
   - Kind: impl
-  - Depends: T2, T6 (needs `PropertyBag` from core and the resolver shape motion produces)
-  - Notes: Per design.md's "Renderer changes" section. `renderFrame`'s existing call
+  - Depends: T2, T6
+  - Notes: Needs `PropertyBag` from core and the resolver shape motion produces. Per design.md's "Renderer changes" section. `renderFrame`'s existing call
     signature must keep working with no `opts.motion` and no `transitionAt` on the `Timeline`
     passed in (defensive `timeline.transitionAt?.(frame)`) — NFR3. The transform bracket wraps
     all three painter dispatch cases (`text`, `rect`, `image`), using each bitmap's own
