@@ -24,3 +24,5 @@ export {
 export type { AlignOptions, RawAsrWord, RawAsrOutput } from "./align.js";
 export { applyLexicon, resolveLexiconDigest } from "./lexicon.js";
 export type { Lexicon, LexiconEntry } from "./lexicon.js";
+export { buildAudioGraphArgv, resolveFfmpegCapabilities, AudioGraphValidationError } from "./graph.js";
+export type { AudioTrack, AudioGraphOptions } from "./graph.js";
