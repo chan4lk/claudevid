@@ -9,3 +9,6 @@ export type { Track, ResolvedTrack, EasingRef } from "./track.js";
 
 export { resolvePreset, exportCatalogue } from "./presets.js";
 export type { PresetParams, CatalogueEntry } from "./presets.js";
+
+export { orderIndices } from "./stagger.js";
+export type { StaggerSpec } from "./stagger.js";
