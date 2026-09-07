@@ -5,7 +5,7 @@
 import { createCanvas } from "@napi-rs/canvas";
 import type { TimelineLayer } from "@claudevid/core";
 import { describe, expect, it } from "vitest";
-import { layoutCode } from "../src/layout.js";
+import { layoutCode, measureLine } from "../src/layout.js";
 import type { CodeLayer } from "../src/schema.js";
 import {
   chromeKey,
@@ -144,5 +144,66 @@ describe("paintCodeLayer (PainterFn conformance)", () => {
         ctx,
       ),
     ).not.toThrow();
+  });
+});
+
+// Regression: render.ts must expand tabs identically to layout.ts (spec.md FR5 / Edge Cases —
+// "a single shared expansion function, never duplicated logic that could disagree") before it
+// paints anything. Before this fix, `paintLine`/`flattenTokens` painted each token's *raw*
+// (unexpanded) text, so a glyph after a `\t` landed at `rawCharIndex * advance` instead of the
+// tab-expanded `expandedCharIndex * advance` that `layout.ts`'s own `layoutLine.rows`/
+// `LayoutLine.charCount` are built from — desyncing glyph x-position (and the typewriter caret)
+// for any line containing a tab.
+describe("tab expansion — render.ts agrees with layout.ts on char position (spec.md FR5, Edge Cases)", () => {
+  it("paints the glyph after a tab at the tab-expanded x position, not the raw-character x position", () => {
+    const tabSize = 4;
+    const fontSize = 20;
+    const line = "x\ty"; // expandTabs(line, 4) === "x    y" — 'y' is expanded char index 5
+    const layer = makeLayer({ tabSize, fontSize, width: 900, height: 400 });
+    const layout = layoutCode([line], { width: layer.width, height: layer.height, fontSize, tabSize });
+    const ir = makeIr([line]);
+    const entry: CompiledCodeLayer = { ir, layout, blocked: false };
+
+    const lineCache = createLineCache();
+    const chromeCache = createChromeCache();
+    const ctx = createCanvas(layer.width, layer.height).getContext("2d");
+    renderCodeFrame(entry, layer, lineCache, chromeCache, ctx, 0);
+
+    // Read the exact bitmap `renderCodeFrame` just cached for this line, via the same (raw-token)
+    // `lineKey` render.ts itself computes — a pure cache-hit read (the `paint` callback throws if
+    // invoked, so a key mismatch fails loudly instead of silently re-rendering).
+    const layoutLine = layout.lines[0]!;
+    const key = lineKey(ir.lines[0]!.tokens, layout.fontSize, layer.theme ?? "github-dark", false, layout.contentWidthPx);
+    const failIfCalled = () => {
+      throw new Error("expected a cache hit — key must match render.ts's own lineKey call");
+    };
+    const rows = Math.max(1, layoutLine.rows.length);
+    const bitmap = lineCache.getOrRender(key, layout.contentWidthPx, rows * layout.lineHeightPx, failIfCalled);
+
+    const advance = measureLine(1, fontSize);
+    const data = bitmap.data();
+    const bitmapWidth = bitmap.width;
+    const bitmapHeight = bitmap.height;
+
+    function hasPaintInColumnRange(xStart: number, xEnd: number): boolean {
+      const x0 = Math.max(0, Math.floor(xStart));
+      const x1 = Math.min(bitmapWidth, Math.ceil(xEnd));
+      for (let y = 0; y < bitmapHeight; y++) {
+        for (let x = x0; x < x1; x++) {
+          const idx = (y * bitmapWidth + x) * 4;
+          if ((data[idx + 3] ?? 0) > 0) return true;
+        }
+      }
+      return false;
+    }
+
+    // Correct (tab-expanded) position: "x" (1 char) + 4 expansion spaces -> 'y' at char index 5.
+    const expandedYCharIndex = "x".length + tabSize;
+    expect(hasPaintInColumnRange(expandedYCharIndex * advance, (expandedYCharIndex + 1) * advance)).toBe(true);
+
+    // The bug this regresses: painting raw (unexpanded) tokens put 'y' at raw char index 2
+    // ("x", "\t", "y") instead of the tab-expanded index 5 — that column must now be empty.
+    const buggyRawYCharIndex = 2;
+    expect(hasPaintInColumnRange(buggyRawYCharIndex * advance, (buggyRawYCharIndex + 1) * advance)).toBe(false);
   });
 });

@@ -31,7 +31,8 @@ import githubDarkHighContrastTheme from "shiki/themes/github-dark-high-contrast.
 
 import type { Diagnostic, Timeline, VideoSpec } from "@claudevid/core";
 import { BUNDLED_LANGS, BUNDLED_THEMES, type CodeLayer } from "./schema.js";
-import { unsupportedLangDiagnostic, unsupportedThemeDiagnostic } from "./diagnostics.js";
+import { checkLayoutDiagnostics, unsupportedLangDiagnostic, unsupportedThemeDiagnostic } from "./diagnostics.js";
+import { layoutCode } from "./layout.js";
 
 export interface Token {
   text: string;
@@ -135,10 +136,21 @@ export interface CompileCodeLayersResult {
  * simply absent from `compiled` — the same "diagnostic pushed, entry skipped" disposition
  * `compileMotion` already uses for an unknown animation preset name.
  *
- * Layout (measure/wrap/fit-to-width) and overflow diagnostics are a later task's concern
- * (`layout.ts`/`diagnostics.ts`, T4/T5) — this function's `compiled` values are exactly FR4's
- * `TokenizedCode`, not yet the `{ ir, layout, blocked }`-shaped entry `render.ts` eventually
- * consumes; a later task extends this compiled map with that layout/overflow information.
+ * For every layer that *does* tokenize, this also runs `layout.ts`'s `layoutCode` and
+ * `diagnostics.ts`'s `checkLayoutDiagnostics` against it (design.md's Technical Approach
+ * diagram: "diagnostics: unsupported lang/theme, overflow, out-of-range focus/scroll/annotation
+ * line" is all one compile-time step) and folds any resulting diagnostics into this function's
+ * own returned `diagnostics` array — the width-fit/line-overflow guardrails (spec.md FR6/FR7)
+ * and the out-of-range `focus.lines`/`scroll.toLine`/`scroll.fromLine`/`annotations[].line`
+ * checks (spec.md FR12/FR13, Edge Cases) are therefore reachable from a real spec through this
+ * one entry point, not only from a caller that separately remembers to call `layoutCode`/
+ * `checkLayoutDiagnostics` itself. This function's `compiled` map values stay exactly FR4's
+ * `TokenizedCode` (not the `{ ir, layout, blocked }`-shaped `CompiledCodeLayer` `render.ts`
+ * consumes) — deliberately, so the `(code, lang, theme)` tokenize-dedupe cache above keeps
+ * returning the identical `TokenizedCode` reference for two layers sharing that triple (AC2)
+ * even when their per-layer `layout` differs (different `width`/`height`/`fontSize`/...);
+ * assembling the render-ready `CompiledCodeLayer` from a `compiled` entry plus its own
+ * `layoutCode` call is still the calling pipeline's job (render.ts's own doc comment).
  */
 export async function compileCodeLayers(spec: VideoSpec, timeline: Timeline): Promise<CompileCodeLayersResult> {
   void spec; // no field of `spec` itself is needed yet — kept for signature parity with `compileMotion(spec, timeline)`.
@@ -178,6 +190,27 @@ export async function compileCodeLayers(spec: VideoSpec, timeline: Timeline): Pr
       tokenizeCache.set(key, tokenized);
     }
     compiled.set(tl.layerKey, tokenized);
+
+    // Layout + overflow + out-of-range-line guardrails (spec.md FR6/FR7/FR12/FR13, Edge Cases)
+    // — run per layer (never deduped like tokenization above: two layers sharing `(code, lang,
+    // theme)` can still declare different `width`/`height`/`fontSize`/`focus`/`scroll`/
+    // `annotations`, so each needs its own `layoutCode`/`checkLayoutDiagnostics` pass).
+    const layout = layoutCode(layer.code.split("\n"), {
+      width: layer.width,
+      height: layer.height,
+      fontSize: layer.fontSize,
+      tabSize: layer.tabSize,
+      wrap: layer.wrap,
+      showLineNumbers: layer.showLineNumbers,
+    });
+    const { diagnostics: layoutDiagnostics } = checkLayoutDiagnostics(tl.layerKey, layout, {
+      maxLines: layer.maxLines,
+      hasScroll: Boolean(layer.scroll),
+      focus: layer.focus,
+      scroll: layer.scroll,
+      annotations: layer.annotations,
+    });
+    diagnostics.push(...layoutDiagnostics);
   }
 
   return { compiled, diagnostics };

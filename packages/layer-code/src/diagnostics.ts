@@ -4,6 +4,7 @@
 // redefinition (spec.md FR13's explicit instruction; `packages/core/src/diagnostics.ts:5-9`).
 import type { Diagnostic } from "@claudevid/core";
 import { BUNDLED_LANGS, BUNDLED_THEMES } from "./schema.js";
+import type { CodeAnnotation, CodeFocus, CodeScroll } from "./schema.js";
 import type { LayoutResult } from "./layout.js";
 
 // --- Unsupported lang/theme (spec.md FR2/FR13, AC3) ------------------------------------------
@@ -59,21 +60,32 @@ export function lineTooLongDiagnostic(layerKey: string, longestLineCharCount: nu
   };
 }
 
-/** Runs both of FR6's compile-time layout guardrails against an already-computed `LayoutResult`
- * (`layout.ts`'s `layoutCode`, T4) and returns the small `{ diagnostics, blocked }` shape a
- * later task (T7's `paintCodeLayer`, via the compiled entry's own `blocked` field — design.md's
- * `CompiledCodeLayer { ir, layout, blocked }`) consumes to decide whether to throw
- * `CodeOverflowError` before painting anything (spec.md FR7 — the second guardrail; this
- * function is the first). A `scroll` config exempts only the line-overflow check (FR6's scroll
- * exemption, AC6) — the width-fit check always applies, scroll or not, since it fits the
- * visible window independently. */
+/** Runs both of FR6's compile-time layout guardrails, plus the Edge Cases' out-of-range
+ * `focus.lines`/`scroll.toLine`/`scroll.fromLine`/`annotations[].line` checks, against an
+ * already-computed `LayoutResult` (`layout.ts`'s `layoutCode`, T4) and returns the small
+ * `{ diagnostics, blocked }` shape a later task (T7's `paintCodeLayer`, via the compiled entry's
+ * own `blocked` field — design.md's `CompiledCodeLayer { ir, layout, blocked }`) consumes to
+ * decide whether to throw `CodeOverflowError` before painting anything (spec.md FR7 — the
+ * second guardrail; this function is the first). A `scroll` config exempts only the
+ * line-overflow check (FR6's scroll exemption, AC6) — the width-fit check always applies, scroll
+ * or not, since it fits the visible window independently. `focus`/`scroll`/`annotations` are all
+ * optional here since a caller only has them when the authored layer actually sets them; when
+ * present, every referenced line number is checked against `layout.lines.length` (the compiled
+ * source line count) and gets its own diagnostic — never silently clamped (Edge Cases). */
 export function checkLayoutDiagnostics(
   layerKey: string,
   layout: LayoutResult,
-  options: { maxLines?: number; hasScroll: boolean },
+  options: {
+    maxLines?: number;
+    hasScroll: boolean;
+    focus?: Pick<CodeFocus, "lines">;
+    scroll?: Pick<CodeScroll, "toLine" | "fromLine">;
+    annotations?: Pick<CodeAnnotation, "line">[];
+  },
 ): { diagnostics: Diagnostic[]; blocked: boolean } {
   const diagnostics: Diagnostic[] = [];
   let blocked = false;
+  const codeLineCount = layout.lines.length;
 
   if (!layout.widthFits) {
     diagnostics.push(lineTooLongDiagnostic(layerKey, layout.longestLineCharCount, layout.fontSize));
@@ -84,6 +96,34 @@ export function checkLayoutDiagnostics(
     const maxAllowed = Math.min(options.maxLines ?? Infinity, layout.availableLines);
     if (layout.totalRows > maxAllowed) {
       diagnostics.push(lineOverflowDiagnostic(layerKey, layout.totalRows, maxAllowed));
+      blocked = true;
+    }
+  }
+
+  if (options.focus) {
+    for (const line of options.focus.lines) {
+      if (line < 1 || line > codeLineCount) {
+        diagnostics.push(focusLinesOutOfRangeDiagnostic(layerKey, line, codeLineCount));
+        blocked = true;
+      }
+    }
+  }
+
+  if (options.scroll) {
+    const { toLine, fromLine } = options.scroll;
+    if (toLine < 1 || toLine > codeLineCount) {
+      diagnostics.push(scrollToLineOutOfRangeDiagnostic(layerKey, toLine, codeLineCount));
+      blocked = true;
+    }
+    if (fromLine !== undefined && (fromLine < 1 || fromLine > codeLineCount)) {
+      diagnostics.push(scrollFromLineOutOfRangeDiagnostic(layerKey, fromLine, codeLineCount));
+      blocked = true;
+    }
+  }
+
+  for (const [index, annotation] of (options.annotations ?? []).entries()) {
+    if (annotation.line < 1 || annotation.line > codeLineCount) {
+      diagnostics.push(annotationLineOutOfRangeDiagnostic(layerKey, index, annotation.line, codeLineCount));
       blocked = true;
     }
   }
@@ -112,6 +152,10 @@ export function focusLinesOutOfRangeDiagnostic(layerKey: string, line: number, c
 
 export function scrollToLineOutOfRangeDiagnostic(layerKey: string, line: number, codeLineCount: number): Diagnostic {
   return outOfRangeLineDiagnostic(layerKey, "scroll/toLine", line, codeLineCount);
+}
+
+export function scrollFromLineOutOfRangeDiagnostic(layerKey: string, line: number, codeLineCount: number): Diagnostic {
+  return outOfRangeLineDiagnostic(layerKey, "scroll/fromLine", line, codeLineCount);
 }
 
 export function annotationLineOutOfRangeDiagnostic(

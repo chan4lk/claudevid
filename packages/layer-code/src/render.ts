@@ -42,10 +42,15 @@ import {
   CHROME_TITLE_BAR_PX,
   GUTTER_PADDING_PX,
   SOFT_WRAP_CONTINUATION_INDENT_CHARS,
+  expandTabs,
   measureLine,
   type LayoutLine,
   type LayoutResult,
 } from "./layout.js";
+
+// Mirrors `layout.ts`'s `layoutCode`'s own `options.tabSize ?? 2` default (spec.md FR1) — used
+// only as the fallback when a layer omits `tabSize`, never a re-derived tab-stop width.
+const DEFAULT_TAB_SIZE = 2;
 
 // Restated verbatim from `packages/renderer-canvas/src/fonts.ts:10` — see file header note.
 const MONO_FONT_FAMILY = "JetBrains Mono, monospace";
@@ -332,6 +337,22 @@ function flattenTokens(tokens: Token[]): Glyph[] {
   return glyphs;
 }
 
+/** Tab-expands every token's raw text via `layout.ts`'s exported `expandTabs` — the exact same
+ * function `layoutCode` already used to build this line's `layoutLine.rows`/`charCount`/`y`
+ * (spec.md FR5 / Edge Cases: "a single shared expansion function, never duplicated logic that
+ * could disagree") — before any of this line's tokens are ever flattened into glyphs
+ * (`flattenTokens`/`glyphRows`) or truncated for the typewriter's in-flight line
+ * (`truncateTokens`). Without this, a raw `\t` in a token's text would flatten to one glyph that
+ * advances by a single character's width, desyncing every glyph painted after it (and the
+ * typewriter caret) from the tab-expanded char indices `layout.ts`/`animations.ts` compute
+ * against. Splitting `expandTabs` across each token independently (rather than joining the whole
+ * line's tokens first) is safe: `\t` never spans a token boundary, so per-token expansion and
+ * whole-line expansion produce byte-identical results, and this preserves each token's own
+ * `color`/`fontStyle`. */
+function expandTokenTabs(tokens: Token[], tabSize: number): Token[] {
+  return tokens.map((t) => ({ ...t, text: expandTabs(t.text, tabSize) }));
+}
+
 /** Splits one source line's flat glyph stream into visual rows using `layoutLine.rows`' own
  * per-row character counts (`layout.ts`'s wrap split — the one source of truth, spec.md
  * FR5/FR12; never re-derives the wrap boundaries itself), inserting
@@ -540,6 +561,7 @@ export function renderCodeFrame(
 
   const theme = layer.theme ?? "github-dark";
   const showLineNumbers = layer.showLineNumbers ?? false;
+  const tabSize = layer.tabSize ?? DEFAULT_TAB_SIZE;
   const { layout, ir } = entry;
   const fps = DEFAULT_FPS;
 
@@ -618,8 +640,11 @@ export function renderCodeFrame(
 
     if (isPartial) {
       // Typewriter's in-flight line: painted directly onto `ctx`, never through `lineCache`
-      // (spec.md FR8's "the one thing that is never cached, by design").
-      const truncated = truncateTokens(line.tokens, partialLineChars);
+      // (spec.md FR8's "the one thing that is never cached, by design"). Tabs are expanded
+      // before truncation — `partialLineChars` (`animations.ts`'s `typewriterState`) counts
+      // against `layout.lineCharCounts`, which is tab-expanded, so truncating the *raw* tokens
+      // at that same numeric index would cut at the wrong character whenever a tab precedes it.
+      const truncated = truncateTokens(expandTokenTabs(line.tokens, tabSize), partialLineChars);
       ctx.save();
       ctx.translate(contentLeftPx, y);
       paintLine(truncated, layoutLine, layout.fontSize, layout.lineHeightPx, 1)(ctx);
@@ -637,12 +662,15 @@ export function renderCodeFrame(
     }
 
     const dimmed = focus ? i + 1 < focus.range[0] || i + 1 > focus.range[1] : false;
+    // `lineKey` stays keyed on the *raw* tokens (design.md's literal formula, unchanged) — only
+    // the paint closure below needs the tab-expanded copy, so a cache hit never pays for
+    // `expandTokenTabs` (it's inside the closure, only invoked on a miss).
     const key = lineKey(line.tokens, layout.fontSize, theme, dimmed, layout.contentWidthPx);
     const bitmap = lineCache.getOrRender(
       key,
       layout.contentWidthPx,
       rowCount * layout.lineHeightPx,
-      paintLine(line.tokens, layoutLine, layout.fontSize, layout.lineHeightPx, dimmed ? dimOpacity : 1),
+      paintLine(expandTokenTabs(line.tokens, tabSize), layoutLine, layout.fontSize, layout.lineHeightPx, dimmed ? dimOpacity : 1),
     );
     ctx.drawImage(bitmap, contentLeftPx, y);
 
