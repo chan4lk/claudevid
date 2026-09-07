@@ -20,3 +20,6 @@ dist/
 
 # specclaw verify run logs (ephemeral, regenerated each run)
 .specclaw/changes/*/logs/
+
+# Local model/TTS cache (downloaded artifacts, not part of the repo)
+.claudevid/

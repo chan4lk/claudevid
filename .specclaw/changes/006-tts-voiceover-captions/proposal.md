@@ -1,201 +1,205 @@
-# Proposal: Local TTS Voiceover, Forced-Aligned Captions & Audio Mux
+# Proposal: Local TTS Voiceover & Duration Feedback (Kokoro synthesis only)
 
 **Created:** 2026-09-06
+**Revised:** 2026-09-07 — split per party-po review; scope cut to the smaller, lower-risk half
 **Status:** 🟡 Draft
 
-**Depends on:** 001-videospec-core (`audio` block, `duration: "auto"`), 002-canvas-render-engine
-(caption text rendering), 003-motion-system (word emphasis tracks), 005-videotoolbox-encoder
-(silent video to mux into).
+**Depends on:** 001-videospec-core (`duration: "auto"`, `CompileTimelineOptions.audioDurations`,
+`MissingAudioDurationError` — **already shipped**, see Grounding below).
+
+**Followed by:** 008-forced-alignment-captions-audio-graph — whisper.cpp alignment, captions
+layer, audio graph/mux, lexicon, SRT/VTT. Depends on this change for the synthesis+cache layer.
+
+## Why this is split from the original 006 proposal
+
+The original 006 proposal bundled two independent value propositions into one large,
+dual-native-runtime change:
+
+1. **Scene durations are guesses** — fixed by measuring synthesized narration length. Needs
+   only Kokoro TTS. No alignment involved.
+2. **Captions / speech-synced motion / SRT-VTT** — needs whisper.cpp forced alignment on top
+   of (1).
+
+Adversarial panel review (`party-report.md` in this folder, round 2, verdict `CHANGES_REQUESTED`,
+9 BLOCK / 16 WARN / 6 NOTE, 0 withdrawn) flagged this bundling directly:
+
+> (party-po) "Duration-fix and caption/motion-sync value are bundled into one large,
+> dual-native-runtime change with no staged variant considered... Name the split explicitly:
+> Kokoro-synthesis + duration-feedback as a smaller first cut; forced-alignment + captions +
+> motion-sync + audio-graph as a follow-on that reuses the cache."
+
+This proposal is that first cut. It ships one native runtime (onnxruntime-node via `kokoro-js`),
+no filter-graph construction, no captions layer, no cross-package layer ownership question.
 
 ## Problem
-
-The requirement doc treats audio as the last thing that happens:
 
 > ### Phase 5: Audio
 > `ffmpeg -i video.mp4 -i voiceover.mp3 -c:v copy -c:a aac -shortest final.mp4`
 
-That is the wrong seam, for a reason that only becomes obvious once you try to make a real
-explainer video: **a Claude-generated video has no `voiceover.mp3`. It has a script.** And the
-visuals must follow the narration, not the other way round.
-
-Concretely, four things are broken by muxing at the end:
-
-1. **Scene durations are guesses.** Claude writes a scene with three sentences of narration and
-   assigns `duration: 4`. The narration actually takes 7.2 seconds. The scene cuts mid-sentence.
-   Every scene in a 30-minute video has this problem independently, and there is no way to fix it
-   by hand at 360 scenes.
-2. **Captions cannot exist.** The doc's Phase 4 caption format requires per-word start/end times:
-   `{ "text": "This", "start": 0.0, "end": 0.2 }`. It then says *"Claude can generate caption
-   timing from a transcript"* — Claude cannot. It has no idea how long a synthesized voice takes
-   to say "kubectl". Guessed timings drift within seconds and read as broken.
-3. **Motion cannot sync to speech.** The most effective explainer beat is a bullet or code line
-   appearing exactly as it is named. That requires knowing when the word is spoken.
-4. **Iteration is ruinous.** Fixing one sentence in scene 3 re-synthesizes 30 minutes of audio.
-
-Meanwhile music sitting at a flat level under a voice makes the voice unintelligible, and
-inconsistent loudness across a batch of videos is immediately noticeable to anyone watching two
-of them in a row.
+Scene durations in the requirements doc are author-guessed (`duration: 4`), and a Claude-authored
+narration script actually takes however long the synthesized voice takes to say it. On a 30-scene
+video, the mismatch means cuts land mid-sentence in some fraction of scenes and there is no
+practical way to hand-fix it at scale. **Editing one sentence must re-synthesize one sentence,
+not the whole project** — otherwise iteration cost grows with project size and the tool is
+unusable for anything beyond a handful of scenes.
 
 ## Proposed Solution
 
-Build `@claudevid/audio` — a **TTS-first** pipeline that runs *before* the timeline is finalized,
-fully offline on Apple Silicon.
-
 **1. Local synthesis with Kokoro.**
-`kokoro-js` on `onnxruntime-node` (CoreML/Metal execution provider on M3 where available).
-Chosen for: fully offline (no API key, no rate limit, no per-render cost — which matters
-enormously for batch generation), MIT-licensed, fast enough on M3 for real-time-plus synthesis,
-and good enough quality for technical narration. Voice selection, speed and pitch are exposed
-per-spec and per-scene.
+`kokoro-js` on `onnxruntime-node` (CoreML/Metal execution provider on Apple Silicon where
+available, CPU fallback elsewhere). Fully offline (no API key, no rate limit, no per-render
+cost), MIT-licensed. Voice and speed are exposed at the spec level only in this increment (see
+Scope cuts below).
 
-**2. Per-block synthesis with content-hash caching.**
-Narration is synthesized per scene (or per narration block), keyed by a hash of
-`text + voice + speed + model version`, cached under `.claudevid/cache/tts/`. Editing one
-sentence re-synthesizes one block. This mirrors change 005's chunk resume and is what makes the
-edit loop survivable.
+**2. Structured narration in the schema, not a bare string.**
+`scene.narration` is `{ text: string; voice?: string; speed?: number }` or an array of that shape
+(an array when a scene needs sentence-level cache granularity) — never a bare string. This
+directly resolves a party-visionary WARN:
 
-**3. Word-level timings via forced alignment — the piece that unlocks everything.**
-Kokoro produces audio, not timings. We run **whisper.cpp** (Metal-accelerated on M3) over the
-*generated* audio to get word-level timestamps. Aligning against synthetic speech with a known
-reference transcript is a far easier problem than open transcription, so accuracy is high.
+> "Narration as a bare string... closes the schema door the out-of-scope item [multi-speaker]
+> would need... a bare string has no room for [voice/speed knobs]... the migration also
+> invalidates every cached block."
 
-Output: `{ word, start, end }[]` per block. This single artifact drives captions, speech-synced
-motion, and SRT/VTT export.
+A bare string is accepted as shorthand and normalized to `{ text }` — one narration item, one
+cache entry, one synthesis unit. This also resolves party-ba's granularity NOTE ("block" meaning
+scene vs. sentence): the unit is explicit and structural, not a documentation convention.
 
-**4. Duration feedback into the timeline.**
-A scene carrying `narration` may declare `duration: "auto"`. The audio pipeline measures the
-synthesized block and supplies an `AudioDurations` map to change 001's `compileTimeline`
-(configurable head/tail padding, minimum duration). Order of operations becomes:
+**3. One content-addressed cache, keyed on the full resolved synthesis request.**
+Correction to the original proposal: **change 005 (`encoder-ffmpeg`) ships no chunk-resume cache**
+— its own party review cut that (see `.specclaw/changes/005-videotoolbox-encoder/design.md`
+Grounding sources: *"chunk cache-key gap → moot, no `cache.ts` in v1"*). The claim that this
+cache "mirrors change 005's chunk resume" was wrong; there is nothing to duplicate. This is the
+project's first content-hash cache, at `.claudevid/cache/tts/` (project-relative, resolved via a
+single root-resolution helper shared with the model-cache path below — one function, two
+callers, so both agree on where project caches live).
 
-```
-spec → synthesize narration → measure + align → compile timeline → render → encode → mux
-```
+Per party-security and party-visionary (independent convergence, both upheld):
 
-This is why audio is a *pipeline stage*, not a post-processing step, and it is the change that
-makes long-form output actually watchable.
+> "Key on the full resolved synthesis request object... including a digest of the applied
+> lexicon entries and the model file digest... write cache entries atomically (temp file plus
+> rename), store length/digest alongside so a partial entry is a miss rather than replayed
+> audio."
 
-**5. Captions layer.**
-A `captions` layer registered into core, rendered by change 002, animated by change 003:
+The key is a hash of the fully-resolved request object — `{ text, voice, speed, modelId,
+modelDigest }` in this increment — not a hand-maintained field list. A field added later (pitch,
+lexicon digest in 008) is added to the request type and the key changes automatically; no cache
+code changes. Cache writes are atomic (temp file + rename); a partial write from an interrupted
+run is a miss, never replayed audio.
 
-- styles: word-by-word pop, phrase blocks, karaoke highlight (active word emphasized), classic
-  bottom-third
-- safe-area aware, with a distinct centred/burned style for vertical shorts
-- active-word emphasis (scale/colour) driven by change 003 tracks, so it composes with everything else
-- reads the same word timings, so captions cannot drift from the audio by construction
+**4. Duration feedback into the timeline — using an already-shipped core seam.**
+Grounding: `packages/core/src/timeline.ts` already implements `CompileTimelineOptions.audioDurations`,
+`MissingAudioDurationError`, and `duration: "auto"` handling — this landed with change 001 and
+needs **no core-side code change**. `resolveSceneDurationSeconds` throws
+`MissingAudioDurationError(sceneId)` when an `"auto"` scene has no matching entry — i.e. core
+**already fails closed** on the absent-map case the original proposal's Open Questions left
+unresolved, and does *not* silently substitute a words-per-minute estimate. This resolves the
+BLOCK about an unnamed `compileTimeline` co-change (there is none — it shipped already) and the
+WARN about an unmarked fail-open estimate (there is no estimate path to guard).
 
-**6. Audio graph and mux.**
-Voiceover + background music + SFX composed through **one FFmpeg filter graph**:
+This package's job is narrow: measure each synthesized narration block's duration (plus
+configurable head/tail padding and a **minimum and maximum** duration bound — the original
+proposal named only a minimum) and produce the `Record<string, number>` that `compileTimeline`
+already accepts as `opts.audioDurations`.
 
-- per-track gain, fade in/out, trim, loop-to-length for music
-- **sidechain ducking** (`sidechaincompress`) so music drops under speech automatically — the
-  difference between "has music" and "sounds produced"
-- **loudness normalization** (`loudnorm`, targeting −14 LUFS for YouTube) so every video in a
-  batch lands at the same perceived level
-- final mux against change 005's silent video with `-c:v copy -c:a aac`
-
-**7. Sidecar exports.** SRT and VTT generated from the same word timings, for platform upload.
-
-**8. Pronunciation control.** A project lexicon mapping technical terms to phonemes or respellings
-(`kubectl`, `Nginx`, `PostgreSQL`, `TypeScript`, `npx`). Without it, a tech-explainer voiceover
-mispronounces its own subject matter, which is disqualifying for this library's exact use case.
+**5. Model pinning.**
+The Kokoro ONNX model is pinned to an explicit URL and digest committed in this package (not
+"download with an integrity check" against a self-served hash). Verified on every load from
+cache; fails closed on mismatch rather than re-downloading. Network access happens only during an
+explicit `claudevid models install` step — never implicitly during a render. Resolves
+party-security's root-of-trust WARN and party-visionary's reproducibility WARN (a project's
+rendered output cannot silently shift because the library's bundled model version changed on a
+contributor's machine — the model id is recorded as a fact of the render, and a mismatch on
+re-render is a warning, not a silent re-time).
 
 ## Scope
 
 ### In Scope
 
-- `packages/audio/src/tts.ts` — Kokoro synthesis, voice/speed config, ONNX session lifecycle
-- `packages/audio/src/cache.ts` — content-hash TTS cache
-- `packages/audio/src/align.ts` — whisper.cpp forced alignment → word timings
-- `packages/audio/src/lexicon.ts` — pronunciation overrides for technical terms
-- `packages/audio/src/durations.ts` — `AudioDurations` map feeding `compileTimeline`
-- `packages/audio/src/graph.ts` — FFmpeg filter graph: gain, fades, ducking, loudnorm
-- `packages/audio/src/mux.ts` — final mux into change 005's output
-- `packages/audio/src/captions/` — captions layer schema, layout, styles, word emphasis
-- `packages/audio/src/export.ts` — SRT / VTT sidecars
-- Model acquisition: download-on-first-use with integrity check and a documented cache location
-- Tests: timing-drift assertion (captions vs audio), ducking level check, loudness target check,
-  cache-hit behaviour on single-sentence edit
+- `packages/audio/src/types.ts` — `NarrationBlock`, `SynthesisRequest` (the full resolved
+  object the cache keys on), `AudioDurations` (alias for core's `Record<string, number>`)
+- `packages/audio/src/tts.ts` — Kokoro synthesis, ONNX session lifecycle, injectable
+  synthesis interface (`synthesize(request): Promise<{ audio: Buffer; sampleRate: number }>`)
+  so cache/duration logic has a fixture seam and does not require the real model in tests —
+  resolves party-architect's WARN on no deterministic test seam, scoped to what this increment
+  needs
+- `packages/audio/src/cache.ts` — content-hash cache over the full `SynthesisRequest`, atomic
+  writes, stores `{ audio, durationSeconds }` together (per party-visionary NOTE: cache the
+  measurement alongside the audio, not just the audio)
+- `packages/audio/src/durations.ts` — measures cached/fresh audio, applies configurable
+  head/tail padding and **min + max** duration bounds, produces the `AudioDurations` map;
+  exceeding the max errors and names the scene rather than clamping silently
+- `packages/audio/src/models.ts` — pinned model URL + digest, `claudevid models install`,
+  verify-on-load
+- Schema addition to `packages/core`: `scene.narration` structured type (`{ text, voice?,
+  speed? }` or array), bare-string shorthand normalized to it — **this is a core-side change
+  named explicitly**, unlike the original proposal's silent core coupling
+- Tests: cache-hit behaviour on single-sentence edit (via the `synthesize()` fixture seam, no
+  real model needed), duration-bounds test (min/max, both directions), atomic-write-under-
+  interruption test, one integration-tier test gated separately that runs real Kokoro synthesis
+  end-to-end
 
-### Out of Scope
+### Out of Scope (this increment — see 008)
 
-- **Cloud TTS providers and a `TtsProvider` abstraction** — explicitly deferred. v1 is
-  local-Kokoro-only. (See Open Questions for the exit path.)
-- Voice cloning, custom voice training
-- Multi-speaker dialogue / character voices
-- Music generation (bring your own track)
-- Real-time or streaming synthesis
-- Audio-reactive motion (waveform-driven animation) — a natural follow-on once timings exist
-- Video encoding itself — change 005
+- Forced alignment / word-level timings, whisper.cpp
+- Captions layer (schema, layout, rendering, animation)
+- Speech-synced motion
+- Audio graph (gain/fades/ducking/loudnorm), mux into 005's output
+- SRT/VTT export
+- Pronunciation lexicon
+- Per-scene voice/speed override (spec-level only in this increment — the original proposal's
+  per-scene knob had no named scenario requiring it; add it in 008 if a concrete scene need
+  appears)
+- Cloud TTS providers, voice cloning, multi-speaker dialogue, music generation, real-time/
+  streaming synthesis
 
 ## Impact
 
-- **Files affected:** ~20 new
-- **Complexity:** large
-- **Risk:** medium-high — two native ML runtimes (onnxruntime-node, whisper.cpp) with model
-  downloads and Apple Silicon build variance, plus a genuine cross-change coupling into 001's
-  timeline compilation.
+- **Files affected:** ~8 new (down from ~20; captions/graph/mux/align/lexicon/export moved to 008)
+- **Complexity:** medium (down from large)
+- **Risk:** medium — one native ML runtime (onnxruntime-node), model download with pinned
+  digest, Apple Silicon build variance. No filter-graph construction, no second untrusted-model
+  validation problem, no cross-package layer question in this increment.
 
 ## Open Questions
 
-- **Model distribution and disk footprint.** Kokoro ONNX (~80–350 MB depending on quantization)
-  plus a whisper model (~75 MB for base, more for higher accuracy). Download on first use with a
-  progress bar and integrity check, or an explicit `claudevid models install` step? Total
-  footprint and where it lives (`~/.cache/claudevid/`?) needs deciding before anyone ships this
-  in CI.
-- **Does `duration: "auto"` land in core v1?** This is the same question raised in change 001,
-  and it must be answered the same way in both. **Recommendation: yes, with an optional
-  `AudioDurations` argument**, so core stays I/O-free and 006 does not force a schema break.
-- **Alignment accuracy on technical jargon.** whisper.cpp may mis-segment `kubectl` or
-  `useEffect`. Since we know the reference transcript, is constrained/forced alignment against it
-  reliable enough, or do we need a fallback (proportional distribution across a phrase) when
-  confidence is low?
-- **Cloud providers later.** We are shipping local-only by explicit choice. If ElevenLabs-grade
-  voice is wanted in six months, does the `synthesize()` signature we write now accommodate a
-  provider that *returns its own word timings* (skipping alignment entirely)? Worth shaping the
-  return type for that even while shipping one implementation.
-- **whisper.cpp acquisition.** Bundle a prebuilt binary, require the user to install it, or use a
-  Node binding (`nodejs-whisper` / `smart-whisper`)? Affects install friction significantly.
-- **Where does narration live in the schema?** `scene.narration: string`, or a `voiceover` layer,
-  or a top-level script array indexed to scenes? The first is simplest for Claude to emit
-  correctly; the third makes a script reviewable as prose before any render.
+- **Per-block wall-clock cost.** party-po (upheld): no seconds-per-block estimate given for
+  synthesis on target hardware, cache-cold vs. cache-warm, at representative project scale. This
+  must be measured during design/build (design.md should include an indicative bench, the same
+  way change 005's design.md ran an indicative smoke bench before committing to numeric targets)
+  rather than asserted here.
 - **Licensing.** Kokoro's model weights and voice packs need a licence review before this ships
-  in a public package.
+  in a public package (carried over from the original proposal, still open).
+- **Narration schema exact shape.** `{ text, voice?, speed? }` vs. requiring an explicit array
+  always (no bare-string shorthand) — deciding this in spec.md/design.md, not here, since it's
+  now scoped narrowly enough to resolve without blocking on 008's needs.
 
-### Panel findings (adversarial review, round 2 — all upheld)
+### Panel findings addressed by this revision (from `party-report.md`, round 2)
 
-_Appended by the party panel. Verdict: CHANGES_REQUESTED (advisory; `party.block: false`)._
+Resolved by scope cut / schema change / correction of a false claim, not carried forward as open
+items: the captions-placement BLOCK, the second-cache BLOCK (claim was false — no 005 cache
+exists to duplicate), the `compileTimeline` co-change BLOCK (already shipped in 001, verified
+against `packages/core/src/timeline.ts`), the forced-alignment-accuracy BLOCK and the matching
+party-ba BLOCK (alignment moved entirely to 008), the FFmpeg-filter-graph-injection BLOCK (no
+filter graph in this increment), the untrusted-aligner-output BLOCK and the fail-open-fallback
+BLOCK (no aligner in this increment), the cache-key-omits-lexicon BLOCK (no lexicon in this
+increment; key is now the full resolved request object so this class of bug can't recur when 008
+adds fields), the bundling WARN (this split *is* the fix), the config-surface WARN (per-scene
+voice/speed/pitch and four caption styles cut — captions aren't in this increment at all, and
+per-scene override is cut pending a named scenario), the duration-ceiling WARN (max bound added),
+the mux-destination WARN (no mux in this increment), the model-root-of-trust WARN (pinned digest
++ explicit install step), the circular-drift-test WARN (no aligner, no drift claim, in this
+increment), the fail-open-estimate WARN (moot — core's existing behaviour is already fail-closed,
+see item 4 above), the cache-key-enumeration WARN (key is the full request object, not a field
+list), the model-reproducibility WARN (pinned + recorded model id), the narration-schema WARN
+(structured type from day one), the cache-should-store-timings-too NOTE (duration stored
+alongside audio now; timings will join in 008 without a key-scheme migration since the key
+already covers the full request).
 
-- **[BLOCK]** (party-architect) Captions layer placed in `packages/audio` while its schema, rendering and animation are owned by three other packages — see party-report.md
-- **[BLOCK]** (party-architect) Second content-hash cache alongside the change-005 mechanism the proposal names — see party-report.md
-- **[BLOCK]** (party-architect) Co-change to `compileTimeline`'s signature and all its existing callers is unnamed — see party-report.md
-- **[BLOCK]** (party-architect) Forced alignment described as a constrained problem but built on an unconstrained transcriber — see party-report.md
-- **[WARN]** (party-architect) The word-timing artifact is the shared contract of four consumers and is specified only as `{ word, start, end }[]` — see party-report.md
-- **[WARN]** (party-architect) No deterministic test seam for tests that all depend on two native ML runtimes — see party-report.md
-- **[NOTE]** (party-architect) FFmpeg is invoked from two packages with no stated shared invocation layer — see party-report.md
-- **[BLOCK]** (party-ba) The proposal's own text contradicts the accuracy claim that "captions cannot exist" rests on — see party-report.md
-- **[WARN]** (party-ba) Scale figures used to justify "large"/"medium-high" scope are asserted, not sourced — see party-report.md
-- **[WARN]** (party-ba) Test descriptions have no failure threshold, so the proposal's headline claims are unfalsifiable at ship time — see party-report.md
-- **[NOTE]** (party-ba) "block" is used for two different granularities that determine what the cache actually re-synthesizes — see party-report.md
-- **[WARN]** (party-po) Duration-fix and caption/motion-sync value are bundled into one large, dual-native-runtime change with no staged variant considered — see party-report.md
-- **[WARN]** (party-po) Per-render wall-clock cost of the pipeline is never quantified — see party-report.md
-- **[WARN]** (party-po) Configuration surface (per-scene voice/speed/pitch, four caption styles, configurable padding) is added with no value attached to the granularity itself — see party-report.md
-- **[NOTE]** (party-po) SRT/VTT export and the lexicon are cheap add-ons riding on the alignment artifact and could be named as an explicit late cut line — see party-report.md
-- **[BLOCK]** (party-security) Spec-supplied audio paths and track parameters are concatenated into one FFmpeg filter graph with no stated escaping — see party-report.md
-- **[BLOCK]** (party-security) Model output (whisper.cpp timestamps) is trusted as ground truth for timeline compilation with no validation against the known reference transcript — see party-report.md
-- **[BLOCK]** (party-security) The low-confidence alignment fallback produces guessed timings that are indistinguishable from measured ones downstream — see party-report.md
-- **[BLOCK]** (party-security) The TTS cache key omits the lexicon, so a pronunciation fix silently serves the old mispronounced audio forever — see party-report.md
-- **[WARN]** (party-security) `duration: "auto"` has a stated floor but no ceiling, letting a measured or misaligned block drive unbounded timeline and render cost — see party-report.md
-- **[WARN]** (party-security) The mux writes over change 005's expensive encode with no stated output destination or recovery path — see party-report.md
-- **[WARN]** (party-security) Download-on-first-use names an integrity check but no root of trust, and one resolution of the whisper.cpp question executes an arbitrary user-supplied binary — see party-report.md
-- **[WARN]** (party-security) "Cannot drift by construction" and the timing-drift test grade the alignment against itself — see party-report.md
-- **[WARN]** (party-security) Rebuttal to party-visionary: an unmarked words-per-minute estimate for `auto` when `AudioDurations` is absent is the fail-open path, not a free preview — see party-report.md
-- **[WARN]** (party-visionary) The cache key is a hand-maintained list of "everything that changes the waveform", and the proposal already names two inputs it omits — see party-report.md
-- **[WARN]** (party-visionary) `duration: "auto"` makes the visual timeline a function of an unpinned model download, so a model upgrade silently changes every existing video's cut points — see party-report.md
-- **[WARN]** (party-visionary) Narration as a bare string plus multi-speaker out of scope closes the schema door the out-of-scope item would need — see party-report.md
-- **[WARN]** (party-visionary) The word-timings artifact is frozen by three consumers on merge day, and the proposal already names a case where consumers need provenance it does not carry — see party-report.md
-- **[NOTE]** (party-visionary) Putting the `captions` layer inside `packages/audio` teaches that a layer lives where its data comes from, and the named follow-on will copy it — see party-report.md
-- **[NOTE]** (party-visionary) The optional `AudioDurations` seam is one step short of letting the timeline compile without models at all — see party-report.md
-- **[NOTE]** (party-visionary) The cache stores the audio but not the timings or measured duration it was created to produce, so alignment is paid on every run the cache was meant to make free — see party-report.md
+Carried forward to 008 (not applicable to this increment's scope): word-timings-artifact WARN,
+FFmpeg-invoked-from-two-packages NOTE, per-word-provenance WARN, captions-teach-precedent NOTE.
+
+Still open, unresolved by scope alone: the per-block wall-clock cost WARN (needs measurement, see
+Open Questions above), licensing (unchanged from original proposal).
 
 ---
 

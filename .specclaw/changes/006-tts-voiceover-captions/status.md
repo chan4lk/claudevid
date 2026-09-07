@@ -1,19 +1,19 @@
-# Status: Local TTS Voiceover, Forced-Aligned Captions & Audio Mux
+# Status: Local TTS Voiceover & Duration Feedback (Kokoro synthesis only)
 
 **Change:** 006-tts-voiceover-captions
 **Started:** 2026-09-06
-**Last Updated:** 2026-09-06
+**Last Updated:** 2026-09-07
 
 ## Progress
 
 | Phase | Status | Notes |
 |-------|--------|-------|
-| Proposal | 🟡 Draft | Awaiting review |
-| Spec | ⚪ Pending | |
-| Design | ⚪ Pending | |
-| Tasks | ⚪ Pending | |
-| Build | ⚪ Pending | |
-| Verify | ⚪ Pending | |
+| Proposal | ✅ Approved |  |
+| Spec | ✅ Done |  |
+| Design | ✅ Done |  |
+| Tasks | ✅ Done |  |
+| Build | ❌ Failed | 8/8 tasks |
+| Verify | ✅ Passed | PASS |
 
 ## Task Progress
 

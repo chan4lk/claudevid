@@ -42,4 +42,59 @@ describe("videoSpecSchema", () => {
     });
     expect(result.success).toBe(true);
   });
+
+  describe("scene.narration", () => {
+    it("parses without a narration field at all (existing specs without narration still work)", () => {
+      const result = videoSpecSchema.safeParse({
+        version: 1,
+        scenes: [{ id: "a", duration: 1, layers: [] }],
+      });
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.scenes[0]!.narration).toBeUndefined();
+      }
+    });
+
+    it("normalizes a bare string to a one-item NarrationBlock[] (AC1)", () => {
+      const result = videoSpecSchema.safeParse({
+        version: 1,
+        scenes: [{ id: "a", duration: 1, layers: [], narration: "hello world" }],
+      });
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.scenes[0]!.narration).toEqual([{ text: "hello world" }]);
+      }
+    });
+
+    it("normalizes a single NarrationBlock object to a one-item array", () => {
+      const result = videoSpecSchema.safeParse({
+        version: 1,
+        scenes: [{ id: "a", duration: 1, layers: [], narration: { text: "a", voice: "x" } }],
+      });
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.scenes[0]!.narration).toEqual([{ text: "a", voice: "x" }]);
+      }
+    });
+
+    it("passes an array of NarrationBlock through unmodified (AC2)", () => {
+      const narration = [{ text: "a" }, { text: "b", voice: "x" }];
+      const result = videoSpecSchema.safeParse({
+        version: 1,
+        scenes: [{ id: "a", duration: 1, layers: [], narration }],
+      });
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.scenes[0]!.narration).toEqual(narration);
+      }
+    });
+
+    it("rejects a narration block missing required text", () => {
+      const result = videoSpecSchema.safeParse({
+        version: 1,
+        scenes: [{ id: "a", duration: 1, layers: [], narration: [{ voice: "x" }] }],
+      });
+      expect(result.success).toBe(false);
+    });
+  });
 });

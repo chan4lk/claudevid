@@ -1,0 +1,13 @@
+{
+  "change": "006-tts-voiceover-captions",
+  "phase": "verify",
+  "branch": "specclaw/006-tts-voiceover-captions",
+  "phases": {
+    "proposal": {"status":"approved","at":"2026-09-07T08:06:38Z"},
+    "spec": {"status":"done","at":"2026-09-07T08:07:46Z"},
+    "design": {"status":"done","at":"2026-09-07T08:08:28Z"},
+    "tasks": {"status":"done","at":"2026-09-07T08:09:05Z"},
+    "build": {"status":"failed","at":"2026-09-07T08:32:04Z","tasks":{"done":8,"total":8,"failed":0}},
+    "verify": {"status":"passed","at":"2026-09-07T08:48:46Z","verdict":"PASS"}
+  }
+}
