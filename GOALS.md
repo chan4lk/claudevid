@@ -1,22 +1,20 @@
-# claudevid — Implementation Goals
+# Goals: claudevid
 
-A Claude-native TypeScript library for generating fast, high-quality tech explainer videos
-on Apple Silicon. Claude directs; the library renders and encodes.
+## Scheduling
+- **Recommended interval:** 480 min
+- **Peak hour:** 18:00 UTC
+- **Avg turns/day:** 2.5
+- **Last updated:** 2026-09-07T02:01:35.822Z
 
-Source requirement: `docs/Qwen_markdown_20260906_vsjxybyq8.md`
-Proposals: `.specclaw/changes/<NNN>-<slug>/proposal.md`
+## Proposals
+- [ ] 001-videospec-core
+- [ ] 002-canvas-render-engine
+- [ ] 003-motion-system
+- [ ] 004-code-block-layer
+- [ ] 005-videotoolbox-encoder
+- [ ] 006-tts-voiceover-captions
+- [ ] 007-cli-claude-skill
 
-**Build order is dependency order.** 001 first — everything imports it.
-
-```
-001 core ──┬─→ 002 renderer ──┬─→ 003 motion ──→ 004 code layer
-           │                  │
-           └─→ 005 encoder ←──┘
-                    │
-           006 audio/TTS ──→ 007 CLI + Claude skill
-```
-
----
 
 ## Decide these two before starting — they recur across proposals
 
