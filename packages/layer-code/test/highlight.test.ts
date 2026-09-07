@@ -1,10 +1,9 @@
-// Minimal sanity coverage for T3's own implementation (compiles and runs end-to-end). Full,
-// exhaustive AC verification (AC1/AC2/AC3 and their edge cases) is a later task's job (T12) —
-// this file only proves `compileCodeLayers` tokenizes, dedupes, and diagnoses without throwing.
-import { describe, expect, it } from "vitest";
+// T12: full AC1/AC2/AC3 coverage (plus the "distinct theme" dedupe-boundary edge case), on top of
+// T3's own minimal sanity coverage below.
+import { describe, expect, it, vi } from "vitest";
 import { compileTimeline } from "@claudevid/core";
 import type { Layer, VideoSpec } from "@claudevid/core";
-import { compileCodeLayers } from "../src/highlight.js";
+import { compileCodeLayers, _getHighlighterCoreForTests } from "../src/highlight.js";
 import "../src/schema.js"; // side effect: registers the "code" layer type
 
 function makeSpec(overrides: Partial<VideoSpec> = {}): VideoSpec {
@@ -94,5 +93,122 @@ describe("compileCodeLayers", () => {
 
     expect(diagnostics).toEqual([]);
     expect(compiled.size).toBe(1);
+  });
+
+  // AC2's literal claim: "a spy on the internal Shiki tokenize call records exactly one
+  // invocation for that triple across both layers" — the reference-equality test above is a
+  // strong proxy, but this spies on the highlighter's own `codeToTokensBase` directly, per AC2's
+  // exact wording.
+  it("AC2 — a spy on the highlighter's codeToTokensBase records exactly one call for a shared (code, lang, theme) triple", async () => {
+    const highlighter = await _getHighlighterCoreForTests();
+    const spy = vi.spyOn(highlighter, "codeToTokensBase");
+    try {
+      const spec = makeSpec({
+        scenes: [{ id: "s", duration: 1, layers: [codeLayer(), codeLayer(), codeLayer()] }],
+      });
+      const timeline = compileTimeline(spec);
+      const { compiled, diagnostics } = await compileCodeLayers(spec, timeline);
+
+      expect(diagnostics).toEqual([]);
+      expect(compiled.size).toBe(3);
+      expect(spy).toHaveBeenCalledTimes(1);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  // Edge Case: "Two code layers with the same code/lang but different theme: tokenization is
+  // per-(code, lang, theme) triple, so this is correctly two cache entries, not incorrectly
+  // deduped to one."
+  it("does not dedupe two layers sharing (code, lang) but with different themes", async () => {
+    const spec = makeSpec({
+      scenes: [
+        {
+          id: "s",
+          duration: 1,
+          layers: [codeLayer({ theme: "github-dark" }), codeLayer({ theme: "github-light" })],
+        },
+      ],
+    });
+    const timeline = compileTimeline(spec);
+    const { compiled, diagnostics } = await compileCodeLayers(spec, timeline);
+
+    expect(diagnostics).toEqual([]);
+    expect(compiled.size).toBe(2);
+    const [a, b] = [...compiled.values()];
+    expect(a).not.toBe(b); // distinct cache entries — not deduped across themes
+    // Prove the difference is real content, not just two references to equal data: github-dark
+    // and github-light use different token colour palettes for the same source.
+    expect(a!.lines[0]!.tokens[0]!.color).not.toBe(b!.lines[0]!.tokens[0]!.color);
+  });
+});
+
+// Regression: `diagnostics.ts`'s `focusLinesOutOfRangeDiagnostic`/`scrollToLineOutOfRangeDiagnostic`/
+// `annotationLineOutOfRangeDiagnostic` builders existed but nothing in the real compile path ever
+// called them — `compileCodeLayers` only tokenized, it never ran `layout.ts`/`checkLayoutDiagnostics`
+// against a layer's `focus`/`scroll`/`annotations`. These prove the checks are now reachable from a
+// real spec through `compileCodeLayers` itself (spec.md FR12/FR13, Edge Cases: "a diagnostic, never
+// silently clamped"), not only from a unit test calling a diagnostic builder directly. `codeLayer()`'s
+// default `code` is two lines ("const x = 1;" / "console.log(x);"), so the valid line range is [1, 2].
+describe("compileCodeLayers — out-of-range focus/scroll/annotation line diagnostics (spec.md FR12/FR13, Edge Cases)", () => {
+  it("diagnoses an out-of-range focus.lines entry", async () => {
+    const spec = makeSpec({
+      scenes: [{ id: "s", duration: 1, layers: [codeLayer({ focus: { lines: [1, 5] } })] }],
+    });
+    const timeline = compileTimeline(spec);
+    const { compiled, diagnostics } = await compileCodeLayers(spec, timeline);
+
+    expect(compiled.size).toBe(1); // tokenization still succeeds — this is a layout-level diagnostic
+    expect(diagnostics).toHaveLength(1);
+    expect(diagnostics[0]!.path).toBe("/scenes/0/layers/0/focus/lines");
+    expect(diagnostics[0]!.message).toMatch(/5/);
+    expect(diagnostics[0]!.message).toMatch(/1, 2/);
+  });
+
+  it("diagnoses an out-of-range scroll.toLine entry", async () => {
+    const spec = makeSpec({
+      scenes: [{ id: "s", duration: 1, layers: [codeLayer({ scroll: { toLine: 99, duration: 1 } })] }],
+    });
+    const timeline = compileTimeline(spec);
+    const { compiled, diagnostics } = await compileCodeLayers(spec, timeline);
+
+    expect(compiled.size).toBe(1);
+    expect(diagnostics).toHaveLength(1);
+    expect(diagnostics[0]!.path).toBe("/scenes/0/layers/0/scroll/toLine");
+    expect(diagnostics[0]!.message).toMatch(/99/);
+  });
+
+  it("diagnoses an out-of-range scroll.fromLine entry", async () => {
+    const spec = makeSpec({
+      scenes: [
+        { id: "s", duration: 1, layers: [codeLayer({ scroll: { toLine: 2, fromLine: 42, duration: 1 } })] },
+      ],
+    });
+    const timeline = compileTimeline(spec);
+    const { compiled, diagnostics } = await compileCodeLayers(spec, timeline);
+
+    expect(compiled.size).toBe(1);
+    expect(diagnostics).toHaveLength(1);
+    expect(diagnostics[0]!.path).toBe("/scenes/0/layers/0/scroll/fromLine");
+    expect(diagnostics[0]!.message).toMatch(/42/);
+  });
+
+  it("diagnoses an out-of-range annotations[].line entry", async () => {
+    const spec = makeSpec({
+      scenes: [
+        {
+          id: "s",
+          duration: 1,
+          layers: [codeLayer({ annotations: [{ line: 1, text: "ok" }, { line: 99, text: "bad" }] })],
+        },
+      ],
+    });
+    const timeline = compileTimeline(spec);
+    const { compiled, diagnostics } = await compileCodeLayers(spec, timeline);
+
+    expect(compiled.size).toBe(1);
+    expect(diagnostics).toHaveLength(1);
+    expect(diagnostics[0]!.path).toBe("/scenes/0/layers/0/annotations/1/line");
+    expect(diagnostics[0]!.message).toMatch(/99/);
   });
 });
