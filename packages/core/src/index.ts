@@ -2,7 +2,7 @@ export { parseSpec } from "./diagnostics.js";
 export type { Diagnostic, ParseResult } from "./diagnostics.js";
 
 export { compileTimeline, MissingAudioDurationError } from "./timeline.js";
-export type { Timeline, TimelineLayer, SceneWindow, CompileTimelineOptions } from "./timeline.js";
+export type { Timeline, TimelineLayer, SceneWindow, CompileTimelineOptions, TransitionFrame } from "./timeline.js";
 
 export { registerLayer } from "./layers.js";
 
