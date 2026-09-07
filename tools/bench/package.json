@@ -3,6 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "main": "./dist/bench.js",
+  "types": "./src/bench.ts",
+  "exports": {
+    ".": {
+      "types": "./src/bench.ts",
+      "import": "./dist/bench.js"
+    }
+  },
   "scripts": {
     "build": "tsup",
     "bench": "node dist/bench.js",

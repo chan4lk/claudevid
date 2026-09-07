@@ -19,6 +19,7 @@
     "@claudevid/audio": "workspace:*",
     "@claudevid/layer-code": "workspace:*",
     "@claudevid/layer-captions": "workspace:*",
+    "@claudevid/bench": "workspace:*",
     "@napi-rs/canvas": "^1.0.8"
   },
   "devDependencies": {

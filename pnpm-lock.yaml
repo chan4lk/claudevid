@@ -78,6 +78,9 @@ importers:
       '@claudevid/audio':
         specifier: workspace:*
         version: link:../audio
+      '@claudevid/bench':
+        specifier: workspace:*
+        version: link:../../tools/bench
       '@claudevid/core':
         specifier: workspace:*
         version: link:../core
