@@ -66,6 +66,7 @@ try {
       // of truth, no separate DEFAULT_MODEL_ID constant).
       modelId: PINNED_MODEL.id,
       modelDigest: PINNED_MODEL.digest,
+      lexiconDigest: "",
     }),
     WARMUP_TIMEOUT_MS,
     "Kokoro warmup synthesis",
