@@ -158,5 +158,24 @@ export function compileMotion(spec: VideoSpec, timeline: Timeline): CompileMotio
     compileTracksForLayer(tracks, tl, spec.fps, compiled, diagnostics);
   }
 
+  // Transition-overlap clamp diagnostic (design.md Key Decision D3): `compileTimeline`
+  // silently clamps a requested cross-fade duration that exceeds either neighbour's own
+  // frame count (matching its own "clamp, don't diagnose" rendering-time precedent) — the
+  // diagnostic about that clamp having actually fired belongs here, where both the spec's
+  // requested duration and the Timeline's resulting `transitionInFrames` are in scope.
+  spec.scenes.forEach((scene, i) => {
+    if (scene.transition?.kind !== "cross-fade") return;
+    const window = timeline.sceneWindows[i];
+    if (!window) return;
+    const requestedFrames = framesFor(scene.transition.duration ?? 0, spec.fps);
+    if (requestedFrames > window.transitionInFrames) {
+      diagnostics.push({
+        path: `/scenes/${i}/transition`,
+        message: `requested cross-fade duration (${requestedFrames}f) exceeds the available overlap and was clamped to ${window.transitionInFrames}f`,
+        suggestion: "shorten the transition duration or lengthen the adjacent scenes",
+      });
+    }
+  });
+
   return { compiled, diagnostics };
 }

@@ -95,6 +95,32 @@ describe("compileMotion", () => {
     expect(resolver.resolve(childKeys[1]!, 3)).toBeDefined();
   });
 
+  it("emits a diagnostic when a requested cross-fade duration was clamped, not a silent shrink (design.md D3)", () => {
+    const spec = makeSpec({
+      fps: 30,
+      scenes: [
+        { id: "a", duration: 1, layers: [] }, // 30 frames
+        { id: "b", duration: 0.2, layers: [], transition: { kind: "cross-fade", duration: 10 } }, // requests 300f, only ~5f available
+      ],
+    });
+    const timeline = compileTimeline(spec);
+    const { diagnostics } = compileMotion(spec, timeline);
+    expect(diagnostics.some((d) => d.message.includes("clamped"))).toBe(true);
+  });
+
+  it("emits no clamp diagnostic when the requested cross-fade duration fits", () => {
+    const spec = makeSpec({
+      fps: 30,
+      scenes: [
+        { id: "a", duration: 3, layers: [] },
+        { id: "b", duration: 3, layers: [], transition: { kind: "cross-fade", duration: 0.5 } },
+      ],
+    });
+    const timeline = compileTimeline(spec);
+    const { diagnostics } = compileMotion(spec, timeline);
+    expect(diagnostics.some((d) => d.message.includes("clamped"))).toBe(false);
+  });
+
   it("does not apply stagger delay to a group's own (never-painted) entry", () => {
     const spec = makeSpec({
       scenes: [
