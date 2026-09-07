@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { mergeChapters, SceneIdCollisionError } from "../src/chapters.js";
+import { mergeChapters, outline, SceneIdCollisionError } from "../src/chapters.js";
 import type { VideoSpec } from "@claudevid/core";
+import type { CreateStructuredMessageOptions } from "../src/anthropic-client.js";
 
 const baseSpec = (overrides: Partial<VideoSpec>): VideoSpec => ({
   version: 1,
@@ -79,5 +80,46 @@ describe("mergeChapters", () => {
       expect(err).toBeInstanceOf(SceneIdCollisionError);
       expect((err as SceneIdCollisionError).collidingIds.sort()).toEqual(["a", "b"]);
     }
+  });
+});
+
+describe("outline", () => {
+  const fakeCreateMessage = (result: unknown) => async (_opts: CreateStructuredMessageOptions) => result;
+
+  it("resolves with the chapters array from a well-formed response", async () => {
+    const chapters = [
+      { title: "Intro", summary: "Sets up the problem." },
+      { title: "The Fix", summary: "Walks through the solution." },
+    ];
+
+    const result = await outline("Explain the fix", {
+      model: "test-model",
+      apiKey: "test-key",
+      createMessage: fakeCreateMessage({ chapters }),
+    });
+
+    expect(result).toEqual(chapters);
+  });
+
+  it("rejects when the response is missing the chapters array", async () => {
+    await expect(
+      outline("Explain the fix", {
+        model: "test-model",
+        apiKey: "test-key",
+        createMessage: fakeCreateMessage({}),
+      }),
+    ).rejects.toThrow(/chapters/);
+  });
+
+  it("rejects when a chapter is missing a title or summary", async () => {
+    await expect(
+      outline("Explain the fix", {
+        model: "test-model",
+        apiKey: "test-key",
+        createMessage: fakeCreateMessage({
+          chapters: [{ title: "Intro" /* missing summary */ }],
+        }),
+      }),
+    ).rejects.toThrow(/title|summary/);
   });
 });
