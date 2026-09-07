@@ -3,3 +3,6 @@ export { CHANNELS, COST_CLASS, isChannel } from "./properties.js";
 
 export { resolveEasing, bakeSpring, MotionConfigError } from "./easing.js";
 export type { SpringSpec, BakedSpring, EasingFn } from "./easing.js";
+
+export { evaluate } from "./track.js";
+export type { Track, ResolvedTrack, EasingRef } from "./track.js";
