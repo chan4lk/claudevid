@@ -34,7 +34,7 @@ additive `renderer-canvas` files in Wave 3.
     load (spec.md FR1). `width`/`height` required per spec.md FR1's grounding (matches `rect`,
     not `image`).
 
-- [ ] `T2` — `themes.ts`: bundled theme data + `checkThemeContrast`
+- [x] `T2` — `themes.ts`: bundled theme data + `checkThemeContrast`
   - Files: `packages/layer-code/src/themes.ts`
   - Estimate: small
   - Kind: impl
@@ -45,7 +45,7 @@ additive `renderer-canvas` files in Wave 3.
 
 ### Wave 2 — Compile-time tokenize + layout + diagnostics (no rendering)
 
-- [ ] `T3` — `highlight.ts`: Shiki singleton + `compileCodeLayers`
+- [x] `T3` — `highlight.ts`: Shiki singleton + `compileCodeLayers`
   - Files: `packages/layer-code/src/highlight.ts`
   - Estimate: large
   - Kind: impl
@@ -58,7 +58,7 @@ additive `renderer-canvas` files in Wave 3.
     }[] }[] }` — no Shiki types in the return value, AC1's JSON round-trip must pass). Unknown
     `lang`/`theme` → diagnostic via `diagnostics.ts` (T5), never thrown (AC3).
 
-- [ ] `T4` — `layout.ts`: fast-path measurement, wrap, fit-to-width
+- [x] `T4` — `layout.ts`: fast-path measurement, wrap, fit-to-width
   - Files: `packages/layer-code/src/layout.ts`
   - Estimate: large
   - Kind: impl
@@ -71,7 +71,7 @@ additive `renderer-canvas` files in Wave 3.
     `LayoutResult` carrying per-line `y` offsets (the one source of truth `annotate.ts`/
     `render.ts` both read — design.md's `annotationPosition` grounding).
 
-- [ ] `T5` — `diagnostics.ts`: all `Diagnostic` construction
+- [x] `T5` — `diagnostics.ts`: all `Diagnostic` construction
   - Files: `packages/layer-code/src/diagnostics.ts`
   - Estimate: medium
   - Kind: impl
@@ -85,7 +85,7 @@ additive `renderer-canvas` files in Wave 3.
 
 ### Wave 3 — Render path + renderer-canvas wiring
 
-- [ ] `T6` — `renderer-canvas`: `painters.ts` registry + `index.ts` wiring
+- [x] `T6` — `renderer-canvas`: `painters.ts` registry + `index.ts` wiring
   - Files: `packages/renderer-canvas/src/painters.ts` (create), `packages/renderer-canvas/src/index.ts` (modify)
   - Estimate: small
   - Kind: impl
@@ -96,7 +96,7 @@ additive `renderer-canvas` files in Wave 3.
     existing exported function's signature changes (this task can run in parallel with T1-T5 —
     it only touches already-existing `renderer-canvas` code).
 
-- [ ] `T7` — `render.ts`: per-line cache, chrome cache, `paintCodeLayer`
+- [x] `T7` — `render.ts`: per-line cache, chrome cache, `paintCodeLayer`
   - Files: `packages/layer-code/src/render.ts`
   - Estimate: large
   - Kind: impl
