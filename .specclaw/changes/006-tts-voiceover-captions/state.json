@@ -8,6 +8,6 @@
     "design": {"status":"done","at":"2026-09-07T08:08:28Z"},
     "tasks": {"status":"done","at":"2026-09-07T08:09:05Z"},
     "build": {"status":"failed","at":"2026-09-07T08:32:04Z","tasks":{"done":8,"total":8,"failed":0}},
-    "verify": {"status":"partial","at":"2026-09-07T08:39:37Z","verdict":"PARTIAL"}
+    "verify": {"status":"passed","at":"2026-09-07T08:48:46Z","verdict":"PASS"}
   }
 }

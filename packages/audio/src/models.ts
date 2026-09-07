@@ -37,9 +37,9 @@ export interface PinnedModel {
 /** The Kokoro ONNX model this package pins (spec.md FR6, design.md D5: "Model pinning replaces
  * 'download with integrity check against a self-served hash.' URL + SHA-256 digest committed
  * in-repo"). `url` is `onnx-community/Kokoro-82M-v1.0-ONNX`'s primary fp32 weight file on Hugging
- * Face, matching the model id `tts.ts` currently loads via kokoro-js's own resolution (see
- * `DEFAULT_MODEL_ID` in tts.ts) — this is the same model, pinned to an explicit, verifiable
- * source instead of "whatever kokoro-js's default resolution fetches today."
+ * Face — `id` below is the single source of truth `tts.ts` imports and loads via kokoro-js's own
+ * resolution — this is the same model, pinned to an explicit, verifiable source instead of
+ * "whatever kokoro-js's default resolution fetches today."
  *
  * TODO: replace `digest` below with the real sha256 of the pinned model file once fetched during
  * a real install — computed via `sha256sum model.onnx` (or `shasum -a 256 model.onnx`) against
