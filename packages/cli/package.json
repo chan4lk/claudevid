@@ -12,6 +12,7 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
+    "@claudevid/claude": "workspace:*",
     "@claudevid/core": "workspace:*",
     "@claudevid/motion": "workspace:*",
     "@claudevid/renderer-canvas": "workspace:*",

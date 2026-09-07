@@ -81,6 +81,9 @@ importers:
       '@claudevid/bench':
         specifier: workspace:*
         version: link:../../tools/bench
+      '@claudevid/claude':
+        specifier: workspace:*
+        version: link:../claude
       '@claudevid/core':
         specifier: workspace:*
         version: link:../core
