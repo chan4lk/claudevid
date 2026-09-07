@@ -81,7 +81,17 @@ async function main() {
   syncSkillAssets();
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exitCode = 1;
-});
+// Gated on this module being the actual entry script, not merely imported — otherwise every
+// test file that imports `generatePromptContent`/`generateSchemaContent` (T9's drift check)
+// would also re-run `main()` as an import side effect and overwrite the committed files with
+// whatever this test worker's own dynamic-layer-registration state happens to be at that point
+// (mirrors the identical bug `packages/cli/src/cli.ts`'s T19 build found in `tools/bench`).
+const isDirectRun =
+  process.argv[1] !== undefined && fileURLToPath(import.meta.url) === path.resolve(process.argv[1]);
+
+if (isDirectRun) {
+  main().catch((err) => {
+    console.error(err);
+    process.exitCode = 1;
+  });
+}
