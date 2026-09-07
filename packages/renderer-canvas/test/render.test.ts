@@ -3,7 +3,7 @@ import { createCanvas } from "@napi-rs/canvas";
 import { parseSpec, compileTimeline } from "@claudevid/core";
 import type { TextLayer, Timeline } from "@claudevid/core";
 import { createRenderer, createFrameBuffer } from "../src/index.js";
-import type { FrameBuffer } from "../src/index.js";
+import type { FrameBuffer, MotionResolver } from "../src/index.js";
 import { measureAndWrap } from "../src/text.js";
 
 // Integration tests: every `Timeline` below comes from real `parseSpec`/`compileTimeline`
@@ -221,5 +221,101 @@ describe("Renderer — dispose (AC9)", () => {
     // it just repaints everything into an empty cache. It must not throw.
     await expect(renderer.renderFrame(timeline, 0, target)).resolves.toBeUndefined();
     expect(renderer.stats().cacheMisses).toBeGreaterThan(0);
+  });
+});
+
+// Change 003 (motion) integration — a fake `MotionResolver` (structural, no dependency on
+// @claudevid/motion) exercising the renderer-side wiring only: FR15's transform bracket,
+// FR16's hold-frame bypass, and the transition two-pass paint (design.md Key Decision D5).
+function fakeResolver(byKey: Record<string, ReturnType<MotionResolver["resolve"]>>): MotionResolver {
+  return { resolve: (layerKey) => byKey[layerKey] };
+}
+
+describe("Renderer — motion resolver applies opacity (AC8)", () => {
+  it("a resolved opacity visibly changes the painted pixels vs. no resolver", async () => {
+    const timeline = compile(rectSpec());
+    const rectLayer = timeline.layers.find((l) => l.type === "rect")!;
+    const centerX = rectLayer.x + 200;
+    const centerY = rectLayer.y + 150;
+
+    const rendererFull = createRenderer(WIDTH, HEIGHT);
+    const targetFull = createFrameBuffer(WIDTH, HEIGHT);
+    await rendererFull.renderFrame(timeline, 0, targetFull);
+
+    const rendererDim = createRenderer(WIDTH, HEIGHT);
+    const targetDim = createFrameBuffer(WIDTH, HEIGHT);
+    const motion = fakeResolver({ [rectLayer.layerKey]: { opacity: 0.3 } });
+    await rendererDim.renderFrame(timeline, 0, targetDim, { motion });
+
+    const idx = (centerY * WIDTH + centerX) * 4;
+    const fullRed = targetFull.data[idx]!;
+    const dimRed = targetDim.data[idx]!;
+
+    expect(fullRed).toBe(255); // opaque red rect, no resolver
+    expect(dimRed).toBeGreaterThan(0); // still partially visible
+    expect(dimRed).toBeLessThan(fullRed); // measurably dimmer — opacity was applied
+  });
+});
+
+describe("Renderer — motion resolver bypasses hold-frame reuse (AC9)", () => {
+  it("does not reuse the previous frame when a resolved PropertyBag differs between frames", async () => {
+    const timeline = compile(textSpec());
+    const textLayer = timeline.layers.find((l) => l.type === "text")!;
+    const renderer = createRenderer(WIDTH, HEIGHT);
+    const frameA = createFrameBuffer(WIDTH, HEIGHT);
+    const frameB = createFrameBuffer(WIDTH, HEIGHT);
+
+    // Same activeAt() layer-key set at frames 10/11 (identical to the plain hold-frame test
+    // above) — the only difference is a motion resolver reporting a different opacity per
+    // frame, which must defeat the fast path 002 built for the no-motion case.
+    const motion: MotionResolver = {
+      resolve: (layerKey, frame) => (layerKey === textLayer.layerKey ? { opacity: frame === 10 ? 0.2 : 0.8 } : undefined),
+    };
+
+    await renderer.renderFrame(timeline, 10, frameA, { motion });
+    await renderer.renderFrame(timeline, 11, frameB, { motion });
+
+    expect(renderer.stats().holdFrames).toBe(0);
+    expect(Buffer.compare(frameA.data, frameB.data)).not.toBe(0);
+  });
+});
+
+describe("Renderer — cross-fade scene transition (change 003)", () => {
+  it("blends both scenes' non-background pixels inside the transition's overlap window", async () => {
+    const spec = {
+      version: 1 as const,
+      width: WIDTH,
+      height: HEIGHT,
+      fps: 30,
+      scenes: [
+        {
+          id: "a",
+          duration: 2,
+          layers: [{ type: "rect" as const, x: 100, y: 100, width: 200, height: 200, fill: "#ff0000" }],
+        },
+        {
+          id: "b",
+          duration: 2,
+          transition: { kind: "cross-fade" as const, duration: 0.5 },
+          layers: [{ type: "rect" as const, x: 800, y: 100, width: 200, height: 200, fill: "#0000ff" }],
+        },
+      ],
+    };
+    const timeline = compile(spec);
+    const overlapStart = timeline.sceneWindows[1]!.startFrame;
+    const overlapFrames = timeline.sceneWindows[1]!.transitionInFrames;
+    expect(overlapFrames).toBeGreaterThan(0);
+
+    const renderer = createRenderer(WIDTH, HEIGHT);
+    const target = createFrameBuffer(WIDTH, HEIGHT);
+    await renderer.renderFrame(timeline, overlapStart + Math.floor(overlapFrames / 2), target);
+
+    const redIdx = (200 * WIDTH + 200) * 4;
+    const blueIdx = (200 * WIDTH + 900) * 4;
+
+    // Both scenes' rects show non-background color mid-transition — the outgoing scene's
+    // red rect hasn't vanished, and the incoming scene's blue rect has already appeared.
+    expect(target.data[redIdx]).toBeGreaterThan(0);
+    expect(target.data[blueIdx + 2]).toBeGreaterThan(0);
   });
 });

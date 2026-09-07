@@ -2,7 +2,7 @@ export { parseSpec } from "./diagnostics.js";
 export type { Diagnostic, ParseResult } from "./diagnostics.js";
 
 export { compileTimeline, MissingAudioDurationError } from "./timeline.js";
-export type { Timeline, TimelineLayer, SceneWindow, CompileTimelineOptions } from "./timeline.js";
+export type { Timeline, TimelineLayer, SceneWindow, CompileTimelineOptions, TransitionFrame } from "./timeline.js";
 
 export { registerLayer } from "./layers.js";
 
@@ -30,6 +30,7 @@ export type { EasingFn, StepDirection } from "./easing.js";
 export type {
   VideoSpec,
   Scene,
+  SceneTransition,
   Layer,
   TextLayer,
   RectLayer,
@@ -39,4 +40,5 @@ export type {
   Animation,
   Meta,
   AudioTrack,
+  PropertyBag,
 } from "./types.js";

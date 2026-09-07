@@ -1,0 +1,12 @@
+{
+  "change": "003-motion-system",
+  "phase": "verify",
+  "branch": "specclaw/003-motion-system",
+  "phases": {
+    "spec": {"status":"done","at":"2026-09-07T02:06:18Z"},
+    "design": {"status":"done","at":"2026-09-07T02:06:19Z"},
+    "tasks": {"status":"done","at":"2026-09-07T02:06:19Z"},
+    "build": {"status":"done","at":"2026-09-07T02:34:49Z"},
+    "verify": {"status":"passed","at":"2026-09-07T02:43:55Z","verdict":"PASS"}
+  }
+}

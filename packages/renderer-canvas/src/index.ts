@@ -1,11 +1,13 @@
+import type { SKRSContext2D } from "@napi-rs/canvas";
 import { createCanvas } from "@napi-rs/canvas";
-import type { Timeline, TimelineLayer } from "@claudevid/core";
+import type { Timeline, TimelineLayer, PropertyBag } from "@claudevid/core";
 import { createRasterCache, type RasterCache } from "./raster-cache.js";
 import { createStatsCollector, type RenderStats } from "./stats.js";
 import { registerBundledFonts } from "./fonts.js";
 import { paintTextLayer } from "./text.js";
 import { paintRectLayer } from "./draw-shapes.js";
 import { paintImageLayer } from "./draw-image.js";
+import { loadAndCacheImage } from "./draw-image.js";
 import type { FrameBuffer } from "./frame-buffer.js";
 
 export type { FrameBuffer } from "./frame-buffer.js";
@@ -15,8 +17,42 @@ export type { RenderStats } from "./stats.js";
 const DEFAULT_CACHE_LIMIT_BYTES = 512 * 1024 * 1024;
 const DEFAULT_BACKGROUND = "#000000";
 
+/** Structural (duck-typed) contract for change 003's motion resolver — matches
+ * `@claudevid/motion`'s `MotionResolver` shape exactly, but this package does not depend on
+ * `@claudevid/motion` (spec.md FR13/FR15: neither package gains a new dependency; `PropertyBag`
+ * is the shared neutral type both already get from `@claudevid/core`). */
+export interface MotionResolver {
+  resolve(layerKey: string, frame: number): PropertyBag | undefined;
+}
+
 export interface RenderFrameOptions {
   scale?: number;
+  /** When present, each active layer's paint call is wrapped in a transform bracket built
+   * from its resolved `PropertyBag` (spec.md FR14/FR15). Omitting it (existing call sites)
+   * changes nothing — additive only (NFR3). */
+  motion?: MotionResolver;
+}
+
+/** `ctx.save()`s, applies opacity + a center-origin translate/rotate/scale bracket from a
+ * resolved `PropertyBag`, and leaves the canvas positioned so the caller can draw at the
+ * *local* origin `(0, 0)` — the caller must `ctx.restore()` once done. `boxWidth`/`boxHeight`
+ * are the layer's own rendered size (design.md FR14 — no separate origin override in v1). */
+function applyMotionTransform(
+  ctx: SKRSContext2D,
+  bag: PropertyBag,
+  x: number,
+  y: number,
+  boxWidth: number,
+  boxHeight: number
+): void {
+  ctx.save();
+  ctx.globalAlpha = bag.opacity ?? 1;
+  const centerX = x + boxWidth / 2 + (bag.x ?? 0);
+  const centerY = y + boxHeight / 2 + (bag.y ?? 0);
+  ctx.translate(centerX, centerY);
+  ctx.rotate(((bag.rotation ?? 0) * Math.PI) / 180);
+  ctx.scale(bag.scaleX ?? 1, bag.scaleY ?? 1);
+  ctx.translate(-boxWidth / 2, -boxHeight / 2);
 }
 
 export interface CreateRendererOptions {
@@ -55,11 +91,15 @@ export function createRenderer(width: number, height: number, opts: CreateRender
   let previousLayerKeys: string | null = null;
   let previousOutput: Buffer | null = null;
 
-  async function paintFrame(active: TimelineLayer[], scale: number): Promise<void> {
+  async function paintFrame(active: TimelineLayer[], scale: number, motion: MotionResolver | undefined, frame: number): Promise<void> {
     // Background is per-scene, not per-layer: every active layer in the same frame shares
     // the same scene and therefore the same `background` string (set once by core's
     // `flattenLayers`), so painting it once from the first active layer (or the opaque
-    // default) avoids a redundant full-canvas fillRect per layer.
+    // default) avoids a redundant full-canvas fillRect per layer. During a cross-fade
+    // (change 003) this is called once per side (outgoing, then incoming under a `globalAlpha`
+    // set by the caller) — each call's `active` list is a single scene's layers, so this still
+    // holds; the second call's fillRect blends over the first via the ambient alpha rather
+    // than clearing it, which is exactly the two-pass cross-dissolve (design.md Key Decision D5).
     const background = active[0]?.background ?? DEFAULT_BACKGROUND;
     ctx.fillStyle = background;
     // Unscaled and outside the `ctx.scale` bracket below: the working canvas is reused
@@ -71,19 +111,44 @@ export function createRenderer(width: number, height: number, opts: CreateRender
     ctx.scale(scale, scale);
     for (const layer of active) {
       const layerStart = Date.now();
+      const bag = motion?.resolve(layer.layerKey, frame);
       switch (layer.layer.type) {
         case "text": {
           const bitmap = paintTextLayer(cache, layer.layer, layer.layerKey);
-          ctx.drawImage(bitmap, layer.x, layer.y);
+          if (bag) {
+            applyMotionTransform(ctx, bag, layer.x, layer.y, bitmap.width, bitmap.height);
+            ctx.drawImage(bitmap, 0, 0);
+            ctx.restore();
+          } else {
+            ctx.drawImage(bitmap, layer.x, layer.y);
+          }
           break;
         }
         case "rect": {
           const bitmap = paintRectLayer(cache, layer.layer);
-          ctx.drawImage(bitmap, layer.x, layer.y);
+          if (bag) {
+            applyMotionTransform(ctx, bag, layer.x, layer.y, bitmap.width, bitmap.height);
+            ctx.drawImage(bitmap, 0, 0);
+            ctx.restore();
+          } else {
+            ctx.drawImage(bitmap, layer.x, layer.y);
+          }
           break;
         }
         case "image": {
-          await paintImageLayer(ctx, layer.layer, layer.x, layer.y);
+          if (bag) {
+            // paintImageLayer resolves its own box (layer.width/height ?? natural image size)
+            // internally — peek it here via the same decode cache (a no-op re-lookup once
+            // loaded) so the transform bracket can be established before drawing.
+            const image = await loadAndCacheImage(layer.layer.src);
+            const boxWidth = layer.layer.width ?? image.naturalWidth;
+            const boxHeight = layer.layer.height ?? image.naturalHeight;
+            applyMotionTransform(ctx, bag, layer.x, layer.y, boxWidth, boxHeight);
+            await paintImageLayer(ctx, layer.layer, 0, 0);
+            ctx.restore();
+          } else {
+            await paintImageLayer(ctx, layer.layer, layer.x, layer.y);
+          }
           break;
         }
         default:
@@ -100,20 +165,41 @@ export function createRenderer(width: number, height: number, opts: CreateRender
   return {
     async renderFrame(timeline, frame, target, frameOpts = {}) {
       const frameStart = Date.now();
-      const active = timeline.activeAt(frame);
+      // `transitionAt` is new and additive (design.md Key Decision D6) — defensively optional
+      // so a `Timeline` from a caller that predates change 003 still works (NFR3).
+      const transition = timeline.transitionAt?.(frame) ?? null;
+      const active = transition ? [...transition.outgoing, ...transition.incoming] : timeline.activeAt(frame);
+
+      const motion = frameOpts.motion;
+      // A layer with a resolved `PropertyBag` genuinely differs frame-to-frame — the
+      // hold-frame fast path (002 FR11) would otherwise reuse a stale animated frame, exactly
+      // the bug 002's own spec.md flagged as change 003's job to fix (FR16).
+      const anyMotion = motion ? active.some((l) => motion.resolve(l.layerKey, frame) !== undefined) : false;
       const keySignature = active
         .map((l) => l.layerKey)
         .sort()
         .join(",");
 
-      if (keySignature === previousLayerKeys && previousOutput) {
+      if (!transition && !anyMotion && keySignature === previousLayerKeys && previousOutput) {
         previousOutput.copy(target.data);
         stats.recordHoldFrame();
         stats.recordFrameMs(Date.now() - frameStart);
         return;
       }
 
-      await paintFrame(active, frameOpts.scale ?? 1);
+      const scale = frameOpts.scale ?? 1;
+      if (transition) {
+        // Two-pass cross-dissolve (design.md Key Decision D5): outgoing scene painted opaque,
+        // then the incoming scene painted on top under `globalAlpha = t` — no new compositing
+        // math, just the existing per-scene paint called twice.
+        await paintFrame(transition.outgoing, scale, motion, frame);
+        ctx.save();
+        ctx.globalAlpha = transition.t;
+        await paintFrame(transition.incoming, scale, motion, frame);
+        ctx.restore();
+      } else {
+        await paintFrame(active, scale, motion, frame);
+      }
 
       workingCanvas.data().copy(target.data);
       previousOutput = Buffer.from(target.data);

@@ -14,6 +14,11 @@ export const audioSchema = z.object({
 });
 export type AudioTrack = z.infer<typeof audioSchema>;
 
+const sceneTransitionSchema = z.object({
+  kind: z.enum(["cut", "cross-fade"]),
+  duration: z.number().min(0).optional(),
+});
+
 // Annotated against the hand-written Scene interface (types.ts) for the same reason
 // GroupLayer is in layers.ts: `layers` recurses through the dynamic registerLayer()
 // union, which Zod can't infer statically. The annotation still forces agreement —
@@ -24,6 +29,7 @@ export const sceneSchema: z.ZodType<SceneType> = z
     duration: z.union([z.number().min(0), z.literal("auto")]),
     background: z.string().optional(),
     layers: z.array(z.lazy(() => layerUnion())),
+    transition: sceneTransitionSchema.optional(),
   })
   .superRefine((scene, ctx) => {
     const violation = checkNestingDepth(scene.layers);
