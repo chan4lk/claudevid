@@ -32,7 +32,7 @@ Notes.
     defines `FrameGeometry`, `ResolvedProfile`, `EncoderCapabilities`, `ProgressEvent`,
     `ArgvInput` per spec.md FR1-FR3/FR9 — plain interfaces, no logic.
 
-- [ ] `T2` — `probe.ts`: capability detection with injectable spawn seam
+- [x] `T2` — `probe.ts`: capability detection with injectable spawn seam
   - Files: `packages/encoder-ffmpeg/src/probe.ts`
   - Estimate: medium
   - Kind: impl
@@ -45,7 +45,7 @@ Notes.
     throwing. `execFn` is the named test seam — must default to the real `spawn` so production
     call sites pass nothing.
 
-- [ ] `T3` — `argv.ts`: sole owner of the complete FFmpeg argv
+- [x] `T3` — `argv.ts`: sole owner of the complete FFmpeg argv
   - Files: `packages/encoder-ffmpeg/src/argv.ts`
   - Estimate: small
   - Kind: impl
@@ -56,7 +56,7 @@ Notes.
     `-pix_fmt yuv420p`, codec/bitrate, `-movflags +faststart`). No other file in this package
     may construct an FFmpeg flag — `pipe.ts` (T6) must call this and append nothing of its own.
 
-- [ ] `T4` — Zero-FFmpeg unit tests for T2/T3
+- [x] `T4` — Zero-FFmpeg unit tests for T2/T3
   - Files: `packages/encoder-ffmpeg/test/probe.test.ts`, `packages/encoder-ffmpeg/test/argv.test.ts`
   - Estimate: medium
   - Kind: test
@@ -69,7 +69,7 @@ Notes.
 
 ### Wave 2 — profiles.ts, temp.ts
 
-- [ ] `T5` — `profiles.ts`: profile table + codec resolution + actionable fallback
+- [x] `T5` — `profiles.ts`: profile table + codec resolution + actionable fallback
   - Files: `packages/encoder-ffmpeg/src/profiles.ts`
   - Estimate: medium
   - Kind: impl
@@ -82,7 +82,7 @@ Notes.
     notice when `cpuEncode` was explicitly requested); throws if `cpuEncode` was requested but
     `libx264` is also unavailable (Edge Cases).
 
-- [ ] `T6` — `temp.ts`: temp-dir lifecycle + signal handling
+- [x] `T6` — `temp.ts`: temp-dir lifecycle + signal handling
   - Files: `packages/encoder-ffmpeg/src/temp.ts`
   - Estimate: medium
   - Kind: impl
@@ -93,7 +93,7 @@ Notes.
     **No `cache.ts` in this change** — this is the sole owner of every encode's on-disk
     artifacts (spec.md FR10's explicit statement of the moot BLOCK finding).
 
-- [ ] `T7` — Tests for T5/T6
+- [x] `T7` — Tests for T5/T6
   - Files: `packages/encoder-ffmpeg/test/profiles.test.ts`, `packages/encoder-ffmpeg/test/temp.test.ts`
   - Estimate: medium
   - Kind: test
@@ -106,7 +106,7 @@ Notes.
 
 ### Wave 3 — pipe.ts (the integration point) + its tests
 
-- [ ] `T8` — `pipe.ts`: single-pipe encode, backpressure, progress parsing, `EncodeError`
+- [x] `T8` — `pipe.ts`: single-pipe encode, backpressure, progress parsing, `EncodeError`
   - Files: `packages/encoder-ffmpeg/src/pipe.ts`, `packages/encoder-ffmpeg/src/index.ts` (finalize exports)
   - Estimate: large
   - Kind: impl
