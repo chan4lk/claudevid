@@ -16,7 +16,7 @@ regression check.
 
 ### Wave 1 — Core schema + timeline extensions
 
-- [ ] `T1` — Add `PropertyBag` type and `Animation.stagger`/`Scene.transition` fields to core
+- [x] `T1` — Add `PropertyBag` type and `Animation.stagger`/`Scene.transition` fields to core
   - Files: `packages/core/src/property-bag.ts` (create), `packages/core/src/layers.ts`, `packages/core/src/schema.ts`, `packages/core/src/types.ts`, `packages/core/src/index.ts`
   - Estimate: small
   - Kind: impl
@@ -25,7 +25,7 @@ regression check.
     number }` (zod: default `kind: "cut"`, `duration` non-negative). Export `PropertyBag` from
     `index.ts`. No change to any existing field or export (design.md FR13).
 
-- [ ] `T2` — `compileTimeline` scene-overlap arithmetic + `Timeline.transitionAt`
+- [x] `T2` — `compileTimeline` scene-overlap arithmetic + `Timeline.transitionAt`
   - Files: `packages/core/src/timeline.ts`
   - Estimate: medium
   - Kind: impl
@@ -37,7 +37,7 @@ regression check.
     only. Overlap semantics are additive; `duration: 0` or `kind: "cut"` must reproduce
     byte-identical `frameCount`/`sceneWindows` to today's output (regression safety).
 
-- [ ] `T3` — Core regression tests for T1/T2
+- [x] `T3` — Core regression tests for T1/T2
   - Files: `packages/core/test/timeline.test.ts` (extend)
   - Estimate: small
   - Kind: test
@@ -49,7 +49,7 @@ regression check.
 
 ### Wave 2 — `@claudevid/motion` package (pure, no rendering)
 
-- [ ] `T4` — Package scaffolding + `properties.ts` (`Channel` union, cost table)
+- [x] `T4` — Package scaffolding + `properties.ts` (`Channel` union, cost table)
   - Files: `packages/motion/package.json`, `tsup.config.ts`, `vitest.config.ts`, `tsconfig.json`, `src/properties.ts`, `src/index.ts` (stub)
   - Estimate: small
   - Kind: config
@@ -58,7 +58,7 @@ regression check.
     dependency: `@claudevid/core` (workspace). `Channel = "opacity"|"x"|"y"|"scaleX"|"scaleY"|
     "rotation"` per spec.md FR1 — no invalidating channels in v1.
 
-- [ ] `T5` — `easing.ts`: `resolveEasing`, `spring`, `bakeSpring`
+- [x] `T5` — `easing.ts`: `resolveEasing`, `spring`, `bakeSpring`
   - Files: `packages/motion/src/easing.ts`
   - Estimate: medium
   - Kind: impl
@@ -69,7 +69,7 @@ regression check.
     at `1/fps`, settle threshold `|1-value|<0.001 && |velocity|<0.001` for 3 consecutive
     samples, hard cap `fps*5` samples, returns `{ frames: number[]; settled: boolean }`.
 
-- [ ] `T6` — `track.ts`: `Track`/`ResolvedTrack` types + `evaluate`
+- [x] `T6` — `track.ts`: `Track`/`ResolvedTrack` types + `evaluate`
   - Files: `packages/motion/src/track.ts`
   - Estimate: medium
   - Kind: impl
@@ -79,7 +79,7 @@ regression check.
     this function. `ResolvedTrack` carries `delayFrames`/`durationFrames` (or `bakedFrames`
     for springs) already converted — no fps parameter here either.
 
-- [ ] `T7` — `presets.ts`: registry + 9 shipped presets + `exportCatalogue`
+- [x] `T7` — `presets.ts`: registry + 9 shipped presets + `exportCatalogue`
   - Files: `packages/motion/src/presets.ts`
   - Estimate: medium
   - Kind: impl
@@ -90,7 +90,7 @@ regression check.
     registration. `exportCatalogue()` returns only `{name, channels}` (spec.md FR7) — no other
     field.
 
-- [ ] `T8` — `stagger.ts`: deterministic ordering
+- [x] `T8` — `stagger.ts`: deterministic ordering
   - Files: `packages/motion/src/stagger.ts`
   - Estimate: small
   - Kind: impl
@@ -99,7 +99,7 @@ regression check.
     FNV-1a hash of each `layerKey`, stable-sorted; no `Math.random`/`Date.now` anywhere in this
     file (NFR2).
 
-- [ ] `T9` — `compile.ts` + `resolver.ts`: `compileMotion`, `createResolver`
+- [x] `T9` — `compile.ts` + `resolver.ts`: `compileMotion`, `createResolver`
   - Files: `packages/motion/src/compile.ts`, `packages/motion/src/resolver.ts`, `packages/motion/src/index.ts` (finalize exports)
   - Estimate: large
   - Kind: impl
@@ -111,7 +111,7 @@ regression check.
     `Diagnostic` shape. A preset name not found in the registry is also a diagnostic (spec.md
     Edge Cases), not a silent no-op. `createResolver` closes over each layer's `startFrame`.
 
-- [ ] `T10` — Motion package test suite
+- [x] `T10` — Motion package test suite
   - Files: `packages/motion/test/track.test.ts`, `easing.test.ts`, `presets.test.ts`, `stagger.test.ts`, `compile.test.ts`, `catalogue.test.ts`
   - Estimate: large
   - Kind: test
@@ -124,7 +124,7 @@ regression check.
 
 ### Wave 3 — Renderer integration + preview tool
 
-- [ ] `T11` — `renderer-canvas`: motion resolver, transform bracket, transition two-pass, hold-frame bypass
+- [x] `T11` — `renderer-canvas`: motion resolver, transform bracket, transition two-pass, hold-frame bypass
   - Files: `packages/renderer-canvas/src/index.ts`
   - Estimate: large
   - Kind: impl
@@ -136,7 +136,7 @@ regression check.
     `width`/`height` (or the image layer's declared box) as the center-origin reference (design
     D4). Hold-frame fast path adds exactly one new condition (`!anyMotion`) per design.md.
 
-- [ ] `T12` — Renderer integration tests for T11
+- [x] `T12` — Renderer integration tests for T11
   - Files: `packages/renderer-canvas/test/render.test.ts` (extend)
   - Estimate: medium
   - Kind: test
@@ -146,7 +146,7 @@ regression check.
     otherwise-identical frames), and one cross-fade test asserting a rendered frame inside a
     transition's overlap window blends both scenes' backgrounds (not just one, per design D5).
 
-- [ ] `T13` — `tools/motion-preview` CLI
+- [x] `T13` — `tools/motion-preview` CLI
   - Files: `tools/motion-preview/package.json`, `src/cli.ts`
   - Estimate: medium
   - Kind: impl
@@ -158,7 +158,7 @@ regression check.
 
 ### Wave 4 — Full-workspace regression
 
-- [ ] `T14` — Workspace-wide build/test/lint pass
+- [x] `T14` — Workspace-wide build/test/lint pass
   - Files: none (verification task)
   - Estimate: small
   - Kind: test
