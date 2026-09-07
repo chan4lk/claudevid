@@ -52,11 +52,16 @@ export interface AlignOptions {
 
 /** The Whisper ONNX model this package's ASR path loads — a real, publicly available
  * `@huggingface/transformers`-compatible model id (mirrors `models.ts`'s `PINNED_MODEL.id` being
- * the single source of truth for Kokoro). `base` (not `tiny`/`small`) per design.md's Notes:
- * "same pinning treatment as 006's Kokoro model," picked here as a reasonable size/quality
- * tradeoff for short narration blocks — not asserted by any test, since every test injects
- * `asrFn` instead of loading this model at all. */
-const ASR_MODEL_ID = "onnx-community/whisper-base";
+ * the single source of truth for Kokoro). `Xenova/whisper-tiny.en` specifically — not
+ * `onnx-community/whisper-base` (this file's original pick) — because `return_timestamps:
+ * 'word'` requires an ONNX export with cross-attentions enabled, and `whisper-base` throws
+ * "Model outputs must contain cross attentions to extract timestamps... not exported with
+ * output_attentions=True" (caught by align.live.test.ts's gated real-model run, T10). This
+ * exact model id is `@huggingface/transformers`'s own documented example for word-level
+ * timestamps (see `automatic-speech-recognition`'s pipeline docs) — English-only, smaller, and
+ * confirmed to support the code path this module needs. Not asserted by any non-live test, since
+ * every other test injects `asrFn` instead of loading this model at all. */
+const ASR_MODEL_ID = "Xenova/whisper-tiny.en";
 
 /** Whisper's own expected input sampling rate (all Whisper checkpoints, including the one pinned
  * above, use a 16 kHz feature extractor). `packages/audio`'s own audio (e.g. Kokoro's output, see
