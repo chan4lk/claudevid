@@ -8,11 +8,11 @@
 
 | Phase | Status | Notes |
 |-------|--------|-------|
-| Proposal | 🟡 Draft | Split out of 006 per party-po recommendation; awaiting review |
-| Spec | ⚪ Pending | |
-| Design | ⚪ Pending | |
-| Tasks | ⚪ Pending | |
-| Build | ⚪ Pending | |
+| Proposal | ✅ Approved |  |
+| Spec | ✅ Done |  |
+| Design | ✅ Done |  |
+| Tasks | ✅ Done |  |
+| Build | 🔨 In-progress |  |
 | Verify | ⚪ Pending | |
 
 ## Task Progress

@@ -34,17 +34,26 @@ batch of videos reads as unprofessional next to each other.
 
 ## Proposed Solution
 
-**1. Forced alignment via whisper.cpp, with a named reconciliation step — not "accuracy is high."**
+**1. Forced alignment via `@huggingface/transformers`'s Whisper ASR pipeline, with a named
+reconciliation step — not "accuracy is high."**
 
-The original proposal asserted forced alignment against a known transcript is inherently
-accurate; party-architect and party-ba both showed this contradicts the fact that whisper.cpp is
-an open transcriber (it can drop, insert, or reorder tokens relative to the reference), and the
-original proposal's own Open Questions conceded this for exactly the jargon this library exists
-to narrate (`kubectl`, `useEffect`). This proposal makes the reconciliation step an explicit,
-scoped component:
+The original proposal named whisper.cpp (a separate native binary/binding) and asserted forced
+alignment against a known transcript is inherently accurate; party-architect and party-ba both
+showed the accuracy claim contradicts the fact that any Whisper-family ASR model is an open
+transcriber (it can drop, insert, or reorder tokens relative to the reference), and the original
+proposal's own Open Questions conceded this for exactly the jargon this library exists to narrate
+(`kubectl`, `useEffect`). Whisper.cpp's own acquisition question (prebuilt binary vs. user
+install vs. a Node binding — an open question in the original proposal) is resolved by not
+needing it at all: `@huggingface/transformers` (already a direct dependency of `packages/audio`
+as of change 006, running on `onnxruntime-node` — see 006's design.md D5/D2 remediation) ships an
+`automatic-speech-recognition` pipeline that loads Whisper models in ONNX form and supports
+`return_timestamps: 'word'` natively. This means ASR and TTS share one runtime, one dependency,
+one cache-root mechanism — not two native ML stacks, resolving party-po's/party-architect's
+"two native runtimes" risk finding at the dependency level, not just the test-seam level. This
+proposal makes the reconciliation step an explicit, scoped component regardless of backend:
 
-- `align.ts` runs whisper.cpp over the synthesized audio to get a raw recognized token stream
-  with timestamps.
+- `align.ts` runs the transformers.js ASR pipeline (Whisper, e.g. `onnx-community/whisper-base`)
+  over the synthesized audio to get a raw recognized token/word stream with timestamps.
 - A **reconciliation function** aligns the recognized stream to the known reference transcript
   (edit-distance / DTW-style alignment between two known token sequences — a bounded, testable
   problem, unlike open ASR).
@@ -70,20 +79,32 @@ reference-transcript surface form (pre-lexicon-substitution) so a caption render
 a phonetic respelling. Punctuation is not a separate word entry. A `segments?: {start,end}[]`
 field groups words into phrase-level cues for the phrase-block caption style.
 
-**3. Captions live in the render package, not here.**
+**3. Captions live in their own layer package — `packages/layer-captions` — not in `packages/audio`.**
 The original proposal put captions' schema/layout/styles inside `packages/audio`, which
-party-architect flagged as a BLOCK (the render package would have to depend on the audio
-package, or the schema would be duplicated) and party-visionary flagged as a precedent problem
-for the named audio-reactive-motion follow-on. Fix, per both:
+party-architect flagged as a BLOCK. Corrected after checking how change 004's `code` layer
+actually ships (`packages/layer-code`) rather than assuming: layer schemas do **not** live in
+`packages/core` itself — core only hardcodes `text`/`rect`/`image`/`group` and exposes a runtime
+`registerLayer(type, schema)` registry (`packages/core/src/layers.ts`) that an external package
+calls at module load. `packages/renderer-canvas` mirrors this with `registerPainter(type, paint)`
+(`packages/renderer-canvas/src/painters.ts`). `packages/layer-code` is the existing precedent:
+its own package, depending on `@claudevid/core` + `@claudevid/renderer-canvas` +
+`@claudevid/motion`, registering itself into both registries at import time — renderer-canvas has
+zero reverse dependency on it. `packages/layer-captions` follows this exact pattern:
 
-- The `captions` layer **schema** lives in `packages/core` alongside every other layer schema.
-- **Layout, styles, and drawing** live in `packages/renderer-canvas` (change 002's package),
-  which is the only package that already knows how to lay out and paint a layer.
+- **Schema**: `packages/layer-captions/src/schema.ts` calls `registerLayer("captions", ...)`.
+- **Layout, styles, and drawing**: `packages/layer-captions/src/render.ts` calls
+  `registerPainter("captions", ...)`. Motion/animation timing/positioning work automatically via
+  the inherited `baseLayerShape` fields and the generic motion resolver — no special-casing
+  needed (verified: this is exactly how layer-code's animation support works today, not a new
+  mechanism to build).
 - **Active-word emphasis** is a `packages/motion` (003) track, same as every other animated
-  property.
+  property — no captions-specific motion code.
 - `packages/audio` (this change) owns exactly one thing relevant to captions: producing the
   word-timing artifact (item 2) and, if needed, grouping it into cue segments. It has no caption
-  rendering code and no dependency on `renderer-canvas`.
+  rendering code and no dependency on `renderer-canvas` or `layer-captions`.
+- `packages/layer-captions` depends on `packages/audio` only for the `WordTiming[]` **type**
+  (not runtime behavior) — same shape as `layer-code`'s dependency on `renderer-canvas`/`motion`
+  for types/utilities, one-directional, no cycle.
 - Caption styles shipped in v1: **one** — karaoke highlight (active word emphasized), since
   that's the style the Problem section's speech-sync beat actually needs. Phrase-block and
   classic bottom-third are cut pending a named scene that needs them (party-po WARN: the original
@@ -127,7 +148,8 @@ migration — this was the point of that design in 006).
 **7. Deterministic test seam.** `align.ts` exposes an injectable alignment interface
 (`align(audio, referenceTranscript): Promise<WordTiming[]>`) the same way 006's `tts.ts` exposes
 `synthesize()` — so cache/graph/captions/export logic is tested against fixtures, and the
-real-whisper.cpp path is a separately-gated integration tier. The timing-drift test is built
+real-ASR-model path is a separately-gated integration tier (mirroring 006's `tts.live.test.ts`).
+The timing-drift test is built
 against an **independent ground truth** (a fixture with known word boundaries, or a silence-
 padded synthetic utterance whose boundaries are measurable from the waveform) with a stated
 tolerance, and includes a case that must fail when a deliberately perturbed alignment is
@@ -139,14 +161,14 @@ passes by construction even on a fallback block.
 
 ### In Scope
 
-- `packages/audio/src/align.ts` — whisper.cpp invocation + reconciliation against reference
-  transcript + validation (monotonic/bounded/token-match) + fail-closed default +
-  opt-in-estimated fallback with `estimated: true` marking
+- `packages/audio/src/align.ts` — transformers.js ASR pipeline invocation + reconciliation
+  against reference transcript + validation (monotonic/bounded/token-match) + fail-closed
+  default + opt-in-estimated fallback with `estimated: true` marking
 - `packages/audio/src/word-timing-types.ts` — the shared word-timing type (item 2), block-
   relative-offset convention documented at the type
-- `packages/core`: `captions` layer schema
-- `packages/renderer-canvas`: captions layout + karaoke-highlight draw
-- `packages/motion`: active-word emphasis track
+- `packages/layer-captions` (new package, mirrors `packages/layer-code`'s structure exactly):
+  `captions` layer schema (`registerLayer`), layout + karaoke-highlight draw (`registerPainter`),
+  active-word emphasis via a `packages/motion` (003) track — no captions-specific motion code
 - `packages/audio/src/graph.ts` — argv-safe FFmpeg filter graph: per-track gain/fade/trim/loop,
   sidechain ducking, loudnorm; reuses `encoder-ffmpeg`'s `probe.ts`
 - `packages/audio/src/mux.ts` — distinct-output-path mux, temp+rename, duration-tolerance check
@@ -172,30 +194,31 @@ passes by construction even on a fallback block.
 
 ## Impact
 
-- **Files affected:** ~14 new + 3 packages touched for the captions schema/layout/emphasis split
+- **Files affected:** ~14 new + `packages/layer-captions` as a new package (mirroring
+  `packages/layer-code`) + `packages/motion` touched for the emphasis track
 - **Complexity:** large
-- **Risk:** medium-high — whisper.cpp (Metal-accelerated on Apple Silicon) alongside 006's
-  onnxruntime-node, model download/build variance, and this change is where an untrusted model
-  output (alignment) is allowed to steer timeline-adjacent behavior — mitigated by the
-  validate-before-use and fail-closed decisions above, but the risk class itself (not just this
-  change's handling of it) is real and should be re-checked in design.md against whatever
-  whisper.cpp build is actually pinned.
+- **Risk:** medium — resolved down from the original proposal's "medium-high, two native ML
+  runtimes": ASR now runs on the same `@huggingface/transformers`/`onnxruntime-node` runtime as
+  006's Kokoro synthesis (one runtime, one dependency, one cache root), not a second native
+  binary/binding. The remaining real risk is unchanged in kind: this change is where an untrusted
+  model output (alignment) is allowed to steer timeline-adjacent behavior — mitigated by the
+  validate-before-use and fail-closed decisions above.
 
 ## Open Questions
 
-- **whisper.cpp acquisition.** Bundle a prebuilt binary, require user install, or a Node binding
-  (`nodejs-whisper` / `smart-whisper`)? If "require user install," resolve the binary from an
-  explicit configured absolute path — never a bare PATH lookup — and verify its version at
-  startup, per party-security's WARN about ambient-PATH execution of an arbitrary binary.
+- **Which Whisper model size to pin** (e.g. `onnx-community/whisper-base` vs. `whisper-small`) —
+  a speed/accuracy tradeoff to settle in design.md, same pinning/shared-cache-root treatment as
+  006's Kokoro model (single source of truth, no separate acquisition mechanism needed since
+  `@huggingface/transformers` is already wired in).
 - **Reconciliation algorithm choice.** Edit-distance alignment vs. DTW vs. a library — needs a
   concrete pick in design.md with a stated behavior for the case where reconciliation itself
   can't produce a confident mapping for a whole block (this is the trigger for the fail-closed
   path in item 1).
 - **Per-block wall-clock cost for alignment specifically** (separate from 006's synthesis cost,
-  since whisper.cpp reruns even on a synthesis cache hit unless the cache — per 006's design —
-  stores the timing artifact once alignment exists, which is exactly what 006's cache-entry
+  since the ASR pipeline reruns even on a synthesis cache hit unless the cache — per 006's design
+  — stores the timing artifact once alignment exists, which is exactly what 006's cache-entry
   shape was built to allow without a second migration).
-- **Licensing** for the pinned whisper.cpp model, same review as 006's Kokoro model.
+- **Licensing** for the pinned Whisper model, same review as 006's Kokoro model.
 
 ---
 
