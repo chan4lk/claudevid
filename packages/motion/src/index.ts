@@ -12,3 +12,9 @@ export type { PresetParams, CatalogueEntry } from "./presets.js";
 
 export { orderIndices } from "./stagger.js";
 export type { StaggerSpec } from "./stagger.js";
+
+export { compileMotion } from "./compile.js";
+export type { CompileMotionResult } from "./compile.js";
+
+export { createResolver } from "./resolver.js";
+export type { MotionResolver } from "./resolver.js";

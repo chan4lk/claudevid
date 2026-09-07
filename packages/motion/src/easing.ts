@@ -85,7 +85,7 @@ export interface BakedSpring {
 
 const SETTLE_EPSILON = 0.001;
 const SETTLE_STREAK_REQUIRED = 3;
-const BAKE_CAP_SECONDS = 5;
+export const BAKE_CAP_SECONDS = 5;
 
 function assertInRange(value: number, min: number, max: number, label: string): void {
   if (!(value > min && value <= max)) {
