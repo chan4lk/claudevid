@@ -1,0 +1,12 @@
+{
+  "change": "009-text-layer-centering",
+  "phase": "build",
+  "branch": "specclaw/009-text-layer-centering",
+  "phases": {
+    "proposal": {"status":"approved","at":"2026-09-08T08:46:43Z"},
+    "spec": {"status":"done","at":"2026-09-08T08:48:00Z"},
+    "design": {"status":"done","at":"2026-09-08T08:49:03Z"},
+    "tasks": {"status":"done","at":"2026-09-08T08:49:24Z"},
+    "build": {"status":"in-progress","at":"2026-09-08T08:51:20Z"}
+  }
+}

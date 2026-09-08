@@ -14,14 +14,17 @@ entirely by the pipeline.
 
 `scripts/validate.mts` and `scripts/render.mts` are thin wrappers — they shell out to the
 claudevid CLI rather than reimplementing validate/render logic — so the CLI has to be reachable
-first. They locate it in one of two ways, in this order:
+first. They locate it in one of three ways, in this order:
 
 1. **Installed as a dependency** (a consumer project): `claudevid` resolved from `node_modules`.
    Install it with `npm install claudevid`.
-2. **Inside the claudevid monorepo**: `packages/cli/dist/cli.js`, which exists only after
+2. **Installed globally** (`npm install -g claudevid`), so its bin is on `PATH`. This is the
+   layout that suits a non-Node host project — a Python or Go repo gets the skill folder alone,
+   with no `package.json` or `node_modules` of its own.
+3. **Inside the claudevid monorepo**: `packages/cli/dist/cli.js`, which exists only after
    `pnpm build` at the repo root.
 
-If neither is present the wrapper fails with a message naming both options.
+If none is present the wrapper fails with a message naming all three options.
 
 Rendering also needs **FFmpeg on `PATH`**, and a spec containing `narration` downloads the Kokoro
 TTS model (~330 MB) on first use. Specs without narration need neither a model nor network.
