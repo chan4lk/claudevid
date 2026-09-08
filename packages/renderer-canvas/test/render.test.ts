@@ -319,3 +319,90 @@ describe("Renderer — cross-fade scene transition (change 003)", () => {
     expect(target.data[blueIdx + 2]).toBeGreaterThan(0);
   });
 });
+
+// Change 009 — `align` anchors a text layer's box *placement*, not just intra-box line
+// justification. Tolerance accounts for glyph side-bearing/anti-aliasing at the bitmap's edges,
+// not for any imprecision in the anchor math itself (mirrors this file's existing 15%-tolerance
+// precedent for AC6's geometric scaling check).
+describe("Renderer — text layer align anchors placement (change 009)", () => {
+  const ANCHOR_TOLERANCE_PX = 12;
+
+  function alignedTextSpec(x: number | "center", align: "left" | "center" | "right") {
+    return {
+      version: 1 as const,
+      width: WIDTH,
+      height: HEIGHT,
+      fps: 30,
+      scenes: [
+        {
+          id: "s1",
+          duration: 1,
+          layers: [{ type: "text" as const, text: "Center Me", x, y: 400, fontSize: 80, color: "#ffffff", align }],
+        },
+      ],
+    };
+  }
+
+  it("AC1: align 'center' with a numeric x centers the bitmap on x", async () => {
+    const timeline = compile(alignedTextSpec(700, "center"));
+    const renderer = createRenderer(WIDTH, HEIGHT);
+    const target = createFrameBuffer(WIDTH, HEIGHT);
+    await renderer.renderFrame(timeline, 0, target);
+
+    const box = nonBackgroundBBox(target, [0, 0, 0]);
+    expect(box).not.toBeNull();
+    expect(Math.abs((box!.minX + box!.maxX) / 2 - 700)).toBeLessThan(ANCHOR_TOLERANCE_PX);
+  });
+
+  it("AC2: align 'center' with x: 'center' centers the bitmap on the canvas midpoint", async () => {
+    const timeline = compile(alignedTextSpec("center", "center"));
+    const renderer = createRenderer(WIDTH, HEIGHT);
+    const target = createFrameBuffer(WIDTH, HEIGHT);
+    await renderer.renderFrame(timeline, 0, target);
+
+    const box = nonBackgroundBBox(target, [0, 0, 0]);
+    expect(box).not.toBeNull();
+    expect(Math.abs((box!.minX + box!.maxX) / 2 - WIDTH / 2)).toBeLessThan(ANCHOR_TOLERANCE_PX);
+  });
+
+  it("AC3: align 'right' with a numeric x places the bitmap's right edge at x", async () => {
+    const timeline = compile(alignedTextSpec(1200, "right"));
+    const renderer = createRenderer(WIDTH, HEIGHT);
+    const target = createFrameBuffer(WIDTH, HEIGHT);
+    await renderer.renderFrame(timeline, 0, target);
+
+    const box = nonBackgroundBBox(target, [0, 0, 0]);
+    expect(box).not.toBeNull();
+    expect(Math.abs(box!.maxX - 1200)).toBeLessThan(ANCHOR_TOLERANCE_PX);
+  });
+
+  it("AC4: align 'left' (default) keeps x as the bitmap's left edge, unchanged", async () => {
+    const timeline = compile(alignedTextSpec(300, "left"));
+    const renderer = createRenderer(WIDTH, HEIGHT);
+    const target = createFrameBuffer(WIDTH, HEIGHT);
+    await renderer.renderFrame(timeline, 0, target);
+
+    const box = nonBackgroundBBox(target, [0, 0, 0]);
+    expect(box).not.toBeNull();
+    expect(Math.abs(box!.minX - 300)).toBeLessThan(ANCHOR_TOLERANCE_PX);
+  });
+
+  it("AC5: the 'center' anchor also applies on the motion (applyMotionTransform) path", async () => {
+    const timeline = compile(alignedTextSpec(700, "center"));
+    const textLayer = timeline.layers.find((l) => l.type === "text")!;
+    const renderer = createRenderer(WIDTH, HEIGHT);
+    const target = createFrameBuffer(WIDTH, HEIGHT);
+    // Identity PropertyBag: exercises the applyMotionTransform branch without itself moving
+    // anything, isolating "does the align anchor still apply under motion" from "does motion
+    // math work at all" (already covered by the AC8/AC9 motion tests above).
+    const motion: MotionResolver = {
+      resolve: (layerKey) =>
+        layerKey === textLayer.layerKey ? { opacity: 1, x: 0, y: 0, rotation: 0, scaleX: 1, scaleY: 1 } : undefined,
+    };
+    await renderer.renderFrame(timeline, 0, target, { motion });
+
+    const box = nonBackgroundBBox(target, [0, 0, 0]);
+    expect(box).not.toBeNull();
+    expect(Math.abs((box!.minX + box!.maxX) / 2 - 700)).toBeLessThan(ANCHOR_TOLERANCE_PX);
+  });
+});

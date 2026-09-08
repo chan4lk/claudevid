@@ -74,6 +74,9 @@ export function _layoutCacheSizeForTests(): number {
 // `cacheKeyPrefix` (the caller's layerKey) is accepted for signature symmetry with sibling
 // paint*Layer functions but deliberately NOT hashed in: per FR4, two layers with identical
 // text/font/color should share one cached bitmap rather than duplicating it per layer.
+// `layer.align` here only justifies wrapped lines relative to each other *within* the returned
+// bitmap (via ctx.textAlign below) — it does not affect where that bitmap lands on the canvas.
+// Box placement per `align` is index.ts's `alignOffsetX`'s job, applied to the caller's `x`.
 export function paintTextLayer(cache: RasterCache, layer: TextLayer, _cacheKeyPrefix: string): Canvas {
   const key = contentHash([
     layer.text,

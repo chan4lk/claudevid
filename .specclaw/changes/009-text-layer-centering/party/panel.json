@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "sig": "85818781 5785",
+  "tier": "thin",
+  "tier_source": "classifier",
+  "rationale": "One subsystem (text renderer) changes with localized additive logic for placement anchoring, no open question alters the file list, and undoing it is a clean revert with no backward-compatibility risk since the default align: \"left\" is unchanged.",
+  "domains": [],
+  "seats": [
+    {"role": "party-po", "model": "sonnet"},
+    {"role": "party-architect", "model": "opus"}
+  ],
+  "dropped": []
+}

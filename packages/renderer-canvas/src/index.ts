@@ -1,13 +1,12 @@
 import type { SKRSContext2D } from "@napi-rs/canvas";
 import { createCanvas } from "@napi-rs/canvas";
-import type { Timeline, TimelineLayer, PropertyBag } from "@claudevid/core";
+import type { Timeline, TimelineLayer, PropertyBag, TextLayer } from "@claudevid/core";
 import { createRasterCache, type RasterCache } from "./raster-cache.js";
 import { createStatsCollector, type RenderStats } from "./stats.js";
 import { registerBundledFonts } from "./fonts.js";
 import { paintTextLayer } from "./text.js";
 import { paintRectLayer } from "./draw-shapes.js";
 import { paintImageLayer } from "./draw-image.js";
-import { loadAndCacheImage } from "./draw-image.js";
 import type { FrameBuffer } from "./frame-buffer.js";
 import { getPainter } from "./painters.js";
 
@@ -40,6 +39,16 @@ export interface RenderFrameOptions {
  * resolved `PropertyBag`, and leaves the canvas positioned so the caller can draw at the
  * *local* origin `(0, 0)` — the caller must `ctx.restore()` once done. `boxWidth`/`boxHeight`
  * are the layer's own rendered size (design.md FR14 — no separate origin override in v1). */
+/** A text layer's `align` anchors its bitmap's placement, not just how its own wrapped lines are
+ * justified relative to each other (that part is `paintTextLayer`'s job, text.ts). `"left"`
+ * (default) keeps `x` at the bitmap's left edge; `"center"`/`"right"` shift `x` so it lands on
+ * the bitmap's horizontal center/right edge instead. */
+function alignOffsetX(align: TextLayer["align"], width: number): number {
+  if (align === "center") return width / 2;
+  if (align === "right") return width;
+  return 0;
+}
+
 function applyMotionTransform(
   ctx: SKRSContext2D,
   bag: PropertyBag,
@@ -118,12 +127,13 @@ export function createRenderer(width: number, height: number, opts: CreateRender
       switch (layer.layer.type) {
         case "text": {
           const bitmap = paintTextLayer(cache, layer.layer, layer.layerKey);
+          const anchoredX = layer.x - alignOffsetX((layer.layer as TextLayer).align, bitmap.width);
           if (bag) {
-            applyMotionTransform(ctx, bag, layer.x, layer.y, bitmap.width, bitmap.height);
+            applyMotionTransform(ctx, bag, anchoredX, layer.y, bitmap.width, bitmap.height);
             ctx.drawImage(bitmap, 0, 0);
             ctx.restore();
           } else {
-            ctx.drawImage(bitmap, layer.x, layer.y);
+            ctx.drawImage(bitmap, anchoredX, layer.y);
           }
           break;
         }
@@ -139,18 +149,16 @@ export function createRenderer(width: number, height: number, opts: CreateRender
           break;
         }
         case "image": {
+          // Identical shape to the text/rect cases above now that `paintImageLayer` returns a
+          // box-sized cached bitmap: its dimensions *are* the layer's box, so the motion
+          // transform no longer needs to peek at the decoded image to establish its pivot.
+          const bitmap = await paintImageLayer(cache, layer.layer);
           if (bag) {
-            // paintImageLayer resolves its own box (layer.width/height ?? natural image size)
-            // internally — peek it here via the same decode cache (a no-op re-lookup once
-            // loaded) so the transform bracket can be established before drawing.
-            const image = await loadAndCacheImage(layer.layer.src);
-            const boxWidth = layer.layer.width ?? image.naturalWidth;
-            const boxHeight = layer.layer.height ?? image.naturalHeight;
-            applyMotionTransform(ctx, bag, layer.x, layer.y, boxWidth, boxHeight);
-            await paintImageLayer(ctx, layer.layer, 0, 0);
+            applyMotionTransform(ctx, bag, layer.x, layer.y, bitmap.width, bitmap.height);
+            ctx.drawImage(bitmap, 0, 0);
             ctx.restore();
           } else {
-            await paintImageLayer(ctx, layer.layer, layer.x, layer.y);
+            ctx.drawImage(bitmap, layer.x, layer.y);
           }
           break;
         }
