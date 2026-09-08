@@ -7,7 +7,6 @@ import { registerBundledFonts } from "./fonts.js";
 import { paintTextLayer } from "./text.js";
 import { paintRectLayer } from "./draw-shapes.js";
 import { paintImageLayer } from "./draw-image.js";
-import { loadAndCacheImage } from "./draw-image.js";
 import type { FrameBuffer } from "./frame-buffer.js";
 import { getPainter } from "./painters.js";
 
@@ -139,18 +138,16 @@ export function createRenderer(width: number, height: number, opts: CreateRender
           break;
         }
         case "image": {
+          // Identical shape to the text/rect cases above now that `paintImageLayer` returns a
+          // box-sized cached bitmap: its dimensions *are* the layer's box, so the motion
+          // transform no longer needs to peek at the decoded image to establish its pivot.
+          const bitmap = await paintImageLayer(cache, layer.layer);
           if (bag) {
-            // paintImageLayer resolves its own box (layer.width/height ?? natural image size)
-            // internally — peek it here via the same decode cache (a no-op re-lookup once
-            // loaded) so the transform bracket can be established before drawing.
-            const image = await loadAndCacheImage(layer.layer.src);
-            const boxWidth = layer.layer.width ?? image.naturalWidth;
-            const boxHeight = layer.layer.height ?? image.naturalHeight;
-            applyMotionTransform(ctx, bag, layer.x, layer.y, boxWidth, boxHeight);
-            await paintImageLayer(ctx, layer.layer, 0, 0);
+            applyMotionTransform(ctx, bag, layer.x, layer.y, bitmap.width, bitmap.height);
+            ctx.drawImage(bitmap, 0, 0);
             ctx.restore();
           } else {
-            await paintImageLayer(ctx, layer.layer, layer.x, layer.y);
+            ctx.drawImage(bitmap, layer.x, layer.y);
           }
           break;
         }
