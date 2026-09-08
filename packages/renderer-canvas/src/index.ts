@@ -1,6 +1,6 @@
 import type { SKRSContext2D } from "@napi-rs/canvas";
 import { createCanvas } from "@napi-rs/canvas";
-import type { Timeline, TimelineLayer, PropertyBag } from "@claudevid/core";
+import type { Timeline, TimelineLayer, PropertyBag, TextLayer } from "@claudevid/core";
 import { createRasterCache, type RasterCache } from "./raster-cache.js";
 import { createStatsCollector, type RenderStats } from "./stats.js";
 import { registerBundledFonts } from "./fonts.js";
@@ -39,6 +39,16 @@ export interface RenderFrameOptions {
  * resolved `PropertyBag`, and leaves the canvas positioned so the caller can draw at the
  * *local* origin `(0, 0)` — the caller must `ctx.restore()` once done. `boxWidth`/`boxHeight`
  * are the layer's own rendered size (design.md FR14 — no separate origin override in v1). */
+/** A text layer's `align` anchors its bitmap's placement, not just how its own wrapped lines are
+ * justified relative to each other (that part is `paintTextLayer`'s job, text.ts). `"left"`
+ * (default) keeps `x` at the bitmap's left edge; `"center"`/`"right"` shift `x` so it lands on
+ * the bitmap's horizontal center/right edge instead. */
+function alignOffsetX(align: TextLayer["align"], width: number): number {
+  if (align === "center") return width / 2;
+  if (align === "right") return width;
+  return 0;
+}
+
 function applyMotionTransform(
   ctx: SKRSContext2D,
   bag: PropertyBag,
@@ -117,12 +127,13 @@ export function createRenderer(width: number, height: number, opts: CreateRender
       switch (layer.layer.type) {
         case "text": {
           const bitmap = paintTextLayer(cache, layer.layer, layer.layerKey);
+          const anchoredX = layer.x - alignOffsetX((layer.layer as TextLayer).align, bitmap.width);
           if (bag) {
-            applyMotionTransform(ctx, bag, layer.x, layer.y, bitmap.width, bitmap.height);
+            applyMotionTransform(ctx, bag, anchoredX, layer.y, bitmap.width, bitmap.height);
             ctx.drawImage(bitmap, 0, 0);
             ctx.restore();
           } else {
-            ctx.drawImage(bitmap, layer.x, layer.y);
+            ctx.drawImage(bitmap, anchoredX, layer.y);
           }
           break;
         }
