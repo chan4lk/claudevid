@@ -5,6 +5,7 @@
 import { describe, expect, it } from "vitest";
 import type { EncoderCapabilities } from "@claudevid/encoder-ffmpeg";
 import type { AudioGraphOptions, AlignRequest, AlignResult, SynthesisRequest } from "@claudevid/audio";
+import { parseSpec } from "@claudevid/core";
 import type { VideoSpec, Timeline } from "@claudevid/core";
 
 // Side-effect import: registers the "captions" layer type (spec.md's forced Decision, design.md
@@ -39,6 +40,17 @@ const fakeCapabilities: EncoderCapabilities = {
   libx264: true,
 };
 
+const SECONDS_PER_CHAR = 0.01;
+
+/** Deterministic fake `synthesize` for the 011-tts-narration-length-guard AC4 regression test
+ * below: no real model, audio whose computed duration is proportional to `request.text.length` —
+ * so the sum across a chunked scene's sub-blocks can be checked against the full original text. */
+async function fakeSynthesizeProportional(request: SynthesisRequest): Promise<{ audio: Buffer; sampleRate: number }> {
+  const durationSeconds = request.text.length * SECONDS_PER_CHAR;
+  const sampleCount = Math.round(durationSeconds * SAMPLE_RATE);
+  return { audio: Buffer.alloc(sampleCount * 2), sampleRate: SAMPLE_RATE };
+}
+
 interface RenderFrameCall {
   timeline: Timeline;
   frame: number;
@@ -67,8 +79,10 @@ function buildSpec(): VideoSpec {
   };
 }
 
-/** Builds a fresh set of fakes + capture buckets for one `runRenderPipeline` call. */
-function buildFakes() {
+/** Builds a fresh set of fakes + capture buckets for one `runRenderPipeline` call. `synthesizeFn`
+ * defaults to `fakeSynthesize`; callers that need a different synthesis fake (e.g. the AC4
+ * proportional-duration regression test below) pass their own. */
+function buildFakes(synthesizeFn: typeof fakeSynthesize = fakeSynthesize) {
   const renderFrameCalls: RenderFrameCall[] = [];
   const encodePipeCalls: { outputPath: string; profileName: string }[] = [];
   const graphCalls: AudioGraphOptions[] = [];
@@ -77,7 +91,7 @@ function buildFakes() {
   const opts: RenderPipelineOptions = {
     profileName: "preview",
     outputPath: "/tmp/does-not-matter/out.mp4",
-    synthesizeFn: fakeSynthesize,
+    synthesizeFn,
     alignFn: fakeAlign,
     probeFn: async () => fakeCapabilities,
     createRendererFn: () => ({
@@ -178,5 +192,51 @@ describe("runRenderPipeline (FR9)", () => {
     expect(muxCalls).toHaveLength(0);
     const timeline = renderFrameCalls[0]!.timeline;
     expect(timeline.layers.some((l) => l.type === "captions")).toBe(false);
+  });
+
+  it("011-tts-narration-length-guard AC4: auto duration reflects the full chunked narration text, not just the first sub-block", async () => {
+    // One sentence, repeated 8x (15 words each = 120 words total), joined with a single space so
+    // concatenating the resulting chunks reproduces this text exactly (chunkNarrationText's own
+    // contract). At the default 90-word threshold this splits into two sub-blocks: sentences 1-6
+    // (90 words) and sentences 7-8 (30 words) — see narration-chunking.ts's greedy grouping.
+    const sentence = "This is a sentence about compliance testing that contains exactly fifteen words in it now.";
+    const longNarrationText = Array(8).fill(sentence).join(" ");
+
+    const parsed = parseSpec({
+      version: 1,
+      width: 100,
+      height: 100,
+      fps: FPS,
+      scenes: [
+        {
+          id: "scene-long",
+          duration: "auto",
+          layers: [],
+          narration: longNarrationText, // single authored block (a bare string)
+        },
+      ],
+    });
+    if (!parsed.ok) throw new Error(`parseSpec failed: ${JSON.stringify(parsed.diagnostics)}`);
+    const spec = parsed.spec;
+
+    const blocks = spec.scenes[0]!.narration!;
+    // Sanity check on this test's own premise: schema parsing actually split the single authored
+    // block into multiple sub-blocks (already wired into schema.ts's narrationSchema transform).
+    expect(blocks.length).toBeGreaterThan(1);
+
+    const { opts, graphCalls } = buildFakes(fakeSynthesizeProportional);
+
+    await runRenderPipeline(spec, opts);
+
+    const expectedDurationSeconds = blocks.reduce((sum, block) => sum + block.text.length * SECONDS_PER_CHAR, 0);
+    const firstBlockOnlyDurationSeconds = blocks[0]!.text.length * SECONDS_PER_CHAR;
+
+    expect(graphCalls).toHaveLength(1);
+    // `compileTimeline` rounds an "auto" scene's seconds to whole frames (Math.round(seconds *
+    // fps)), so allow up to half a frame of rounding error rather than asserting exact equality.
+    expect(Math.abs(graphCalls[0]!.outputDurationSeconds - expectedDurationSeconds)).toBeLessThan(1 / FPS);
+    // The regression this guards against: computing duration from only the first sub-block (or
+    // any truncated prefix) instead of summing every sub-block chunkNarrationText produced.
+    expect(Math.abs(graphCalls[0]!.outputDurationSeconds - firstBlockOnlyDurationSeconds)).toBeGreaterThan(1 / FPS);
   });
 });
