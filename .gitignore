@@ -30,3 +30,4 @@ out/
 # Distributable package build output (regenerate with `pnpm package`)
 dist-package/
 claudevid-*.tgz
+demo/

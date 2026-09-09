@@ -35,3 +35,18 @@ Wave 2 ran 3 parallel coding agents (T2, T3, T4) against one shared checkout (gi
 Consider git.strategy: worktree-per-change (or per-task) when running parallel build waves with auto_commit, so concurrent agents can't race on the same working tree's git index.
 
 ---
+
+## [L3] best_practice — Instructing each parallel wave agent to stage/commit ONLY...
+
+**When:** 2026-09-09 07:01 UTC
+**Category:** best_practice
+**Priority:** low
+**Status:** pending
+
+### Detail
+Instructing each parallel wave agent to stage/commit ONLY its own declared files by exact path (never git add -A/./−a) fully prevented the commit-race class of bug seen in change 010's wave 2 (T3's commit got swept into T4's). All 3 parallel-task waves in this build (2-task and 4-task) produced clean, correctly-attributed single-file commits with zero manual reconciliation needed.
+
+### Action
+Consider adding this instruction as a standard line in specclaw-build-context's output for any task sharing a wave with others in a non-worktree git.strategy, rather than relying on the orchestrator to remember to add it per-prompt.
+
+---

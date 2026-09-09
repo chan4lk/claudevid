@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "sig": "70597439 11367",
+  "tier": "standard",
+  "tier_source": "classifier",
+  "rationale": "Multiple subsystems change (cli, skills, audio/core, validate, render-pipeline) but all edits are additive warnings and optional auto-chunking; a new build-time step to embed freshness signals is straightforward metadata compilation, not a structural release-machinery change.",
+  "domains": ["ops"],
+  "seats": [
+    {"role": "party-po", "model": "sonnet"},
+    {"role": "party-architect", "model": "opus"},
+    {"role": "party-ba", "model": "sonnet"}
+  ],
+  "dropped": []
+}

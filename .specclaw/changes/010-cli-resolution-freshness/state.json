@@ -1,0 +1,12 @@
+{
+  "change": "010-cli-resolution-freshness",
+  "phase": "build",
+  "branch": "specclaw/010-cli-resolution-freshness",
+  "phases": {
+    "proposal": {"status":"approved","at":"2026-09-09T06:36:25Z"},
+    "spec": {"status":"done","at":"2026-09-09T06:38:18Z"},
+    "design": {"status":"done","at":"2026-09-09T06:38:56Z"},
+    "tasks": {"status":"done","at":"2026-09-09T06:39:20Z"},
+    "build": {"status":"failed","at":"2026-09-09T06:49:51Z","tasks":{"done":4,"total":4,"failed":0}}
+  }
+}

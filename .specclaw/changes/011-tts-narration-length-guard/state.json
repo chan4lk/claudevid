@@ -1,0 +1,12 @@
+{
+  "change": "011-tts-narration-length-guard",
+  "phase": "build",
+  "branch": "specclaw/011-tts-narration-length-guard",
+  "phases": {
+    "proposal": {"status":"approved","at":"2026-09-09T06:36:25Z"},
+    "spec": {"status":"done","at":"2026-09-09T06:41:48Z"},
+    "design": {"status":"done","at":"2026-09-09T06:42:38Z"},
+    "tasks": {"status":"done","at":"2026-09-09T06:43:17Z"},
+    "build": {"status":"failed","at":"2026-09-09T07:00:12Z","tasks":{"done":8,"total":8,"failed":0}}
+  }
+}

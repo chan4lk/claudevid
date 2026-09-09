@@ -1,7 +1,7 @@
 # 🦞 SpecClaw Dashboard
 
 **Project:** claudevid
-**Last Updated:** 2026-09-08 08:56 UTC
+**Last Updated:** 2026-09-09 07:01 UTC
 
 ## Active Changes
 
@@ -15,6 +15,8 @@
 - 🔍 **007-cli-claude-skill** — verify PASS | 21/21 tasks (100%) | 0 failed
 - 🔍 **008-forced-alignment-captions-audio-graph** — verify PASS | 0/10 tasks (0%) | 0 failed | PR #9 merged
 - 🔨 **009-text-layer-centering** — build failed | 2/2 tasks (100%) | 0 failed
+- 🔨 **010-cli-resolution-freshness** — build failed | 4/4 tasks (100%) | 0 failed
+- 🔨 **011-tts-narration-length-guard** — build failed | 8/8 tasks (100%) | 0 failed
 
 ## Pending Proposals
 
@@ -26,6 +28,6 @@ _None._
 
 ## Stats
 
-- **Total changes:** 9
-- **Active:** 9
+- **Total changes:** 11
+- **Active:** 11
 - **Completed:** 0
