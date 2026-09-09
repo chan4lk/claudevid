@@ -29,6 +29,11 @@ If none is present the wrapper fails with a message naming all three options.
 Rendering also needs **FFmpeg on `PATH`**, and a spec containing `narration` downloads the Kokoro
 TTS model (~330 MB) on first use. Specs without narration need neither a model nor network.
 
+Narration length is handled automatically: a `narration` block long enough to risk Kokoro's own
+per-call token limit is split into several shorter, sentence-aligned blocks at spec-parse time, so
+a single long block can't be silently cut off mid-sentence. There's no need to pre-chunk long
+narration text by hand — writing it as one block is fine.
+
 ## Schema
 
 `schemas/video-spec.schema.json` is the full JSON Schema for `VideoSpec` — a byte-identical,

@@ -24,14 +24,14 @@ change.
 
 ### Wave 2 — Its tests, and the schema wiring (parallel — no shared files)
 
-- [ ] `T2` — Unit tests for `chunkNarrationText()`
+- [x] `T2` — Unit tests for `chunkNarrationText()`
   - Files: `packages/core/test/narration-chunking.test.ts` (new)
   - Estimate: small
   - Kind: test
   - Depends: T1
   - Notes: Cover spec.md's Edge Cases and Acceptance Criteria 1-3: under-threshold text returns a single chunk equal to the input; over-threshold text returns multiple chunks whose concatenation equals the input; a single-capital-letter-plus-period pattern (e.g. `"...analyst D. Wickramasinghe."`) is not split immediately after the initial; a single run-on sentence longer than the threshold with no internal sentence boundary returns itself as one (still-over-threshold) chunk rather than being mid-sentence-split.
 
-- [ ] `T3` — Apply chunking in `narrationSchema`'s transform; export the primitive from `packages/core`
+- [x] `T3` — Apply chunking in `narrationSchema`'s transform; export the primitive from `packages/core`
   - Files: `packages/core/src/schema.ts`, `packages/core/src/index.ts`
   - Estimate: small
   - Kind: impl
@@ -40,28 +40,28 @@ change.
 
 ### Wave 3 — Everything downstream of the schema wiring (parallel — no shared files)
 
-- [ ] `T4` — Extend schema tests for the chunking transform
+- [~] `T4` — Extend schema tests for the chunking transform
   - Files: `packages/core/test/schema.test.ts`
   - Estimate: small
   - Kind: test
   - Depends: T3
   - Notes: An over-length authored block resolves to multiple `NarrationBlock`s in `parseSpec`'s output, each carrying the original `voice`/`speed` (spec.md AC1). An under-threshold authored block resolves to the same single-block shape produced today — byte-identical to pre-change output (spec.md AC2), including the existing bare-string/single-object/array input-shape tests already in this file.
 
-- [ ] `T5` — Report authored-vs-resolved narration block counts in `runValidate`
+- [~] `T5` — Report authored-vs-resolved narration block counts in `runValidate`
   - Files: `packages/cli/src/commands/validate.ts`
   - Estimate: small
   - Kind: impl
   - Depends: T3
   - Notes: Using the raw parsed JSON already in scope (before `parseSpec(json)`), count each scene's authored `narration` field the same way `narrationSchema`'s shape-normalization does (`Array.isArray(v) ? v.length : v == null ? 0 : 1`). After a successful parse, compare against `spec.scenes[i].narration.length`; for any scene where they differ, append a line naming the scene and both counts to the existing summary message. No change to the message when no scene's counts differ (spec.md AC6).
 
-- [ ] `T7` — End-to-end duration check via the render pipeline's injectable `synthesizeFn`
+- [~] `T7` — End-to-end duration check via the render pipeline's injectable `synthesizeFn`
   - Files: `packages/cli/test/render-pipeline.test.ts`
   - Estimate: small
   - Kind: test
   - Depends: T3
   - Notes: A fake `synthesizeFn` returns audio whose (computed) `durationSeconds` is proportional to `request.text.length`, with no real model. A spec with one `"auto"`-duration scene whose single authored narration block is long enough to split asserts the scene's computed duration reflects the **full** original text's proportional length, not a truncated prefix (spec.md AC4) — this is the test the pre-split proposal's review flagged as missing.
 
-- [ ] `T8` — Update `SKILL.md`'s narration-length note
+- [x] `T8` — Update `SKILL.md`'s narration-length note
   - Files: `.claude/skills/video-generator/SKILL.md`
   - Estimate: small
   - Kind: docs
