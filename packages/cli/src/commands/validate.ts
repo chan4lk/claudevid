@@ -54,7 +54,29 @@ export function runValidate(specPath: string, deps: ValidateDeps): ValidateResul
 
   const autoSuffix = autoCount > 0 ? ` (${autoCount} auto-duration)` : "";
   const sceneWord = spec.scenes.length === 1 ? "scene" : "scenes";
-  const message = `${spec.scenes.length} ${sceneWord}, ~${totalSeconds}s${autoSuffix}`;
+  const summaryLine = `${spec.scenes.length} ${sceneWord}, ~${totalSeconds}s${autoSuffix}`;
+
+  // Compare each scene's authored `narration` block count (from the raw parsed JSON, before
+  // `parseSpec` chunked any over-length blocks) against the resolved count, mirroring
+  // `narrationSchema`'s own shape-normalization in `@claudevid/core`'s schema.ts.
+  const rawScenes = Array.isArray((json as { scenes?: unknown })?.scenes)
+    ? (json as { scenes: unknown[] }).scenes
+    : [];
+  const narrationLines: string[] = [];
+  spec.scenes.forEach((scene, i) => {
+    const rawNarration = (rawScenes[i] as { narration?: unknown } | undefined)?.narration;
+    const authoredCount = Array.isArray(rawNarration) ? rawNarration.length : rawNarration == null ? 0 : 1;
+    const resolvedCount = scene.narration?.length ?? 0;
+    if (authoredCount !== resolvedCount) {
+      const authoredWord = authoredCount === 1 ? "block" : "blocks";
+      const resolvedWord = resolvedCount === 1 ? "sub-block" : "sub-blocks";
+      narrationLines.push(
+        `scene "${scene.id}": narration normalized from ${authoredCount} authored ${authoredWord} to ${resolvedCount} ${resolvedWord}`,
+      );
+    }
+  });
+
+  const message = [summaryLine, ...narrationLines].join("\n");
 
   return { ok: true, sceneCount: spec.scenes.length, message };
 }
