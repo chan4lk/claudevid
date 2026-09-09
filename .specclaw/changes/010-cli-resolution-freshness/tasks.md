@@ -22,21 +22,21 @@ currently states the old resolution order as fact.
 
 ### Wave 2 — Tests, call sites, and docs
 
-- [ ] `T2` — Unit tests for `pickCli()`
+- [x] `T2` — Unit tests for `pickCli()`
   - Files: `.claude/skills/video-generator/scripts/resolve-cli.test.mts` (new)
   - Estimate: small
   - Kind: test
   - Depends: T1
   - Notes: Use Node's built-in `node:test` + `node:assert` (no new dependency, no package.json). Cover spec.md's Acceptance Criteria 1-3: (a) monorepo path present + local dep present + global present → monorepo wins; (b) monorepo path absent + local dep present + global present → local dep wins (today's behavior preserved); (c) monorepo absent + local dep absent + global present → global wins; (d) all three absent → throws the three-option message. Run via `node --test scripts/resolve-cli.test.mts` from `.claude/skills/video-generator/`.
 
-- [ ] `T3` — Point `render.mts` and `validate.mts` at the shared resolver
+- [x] `T3` — Point `render.mts` and `validate.mts` at the shared resolver
   - Files: `.claude/skills/video-generator/scripts/render.mts`, `.claude/skills/video-generator/scripts/validate.mts`
   - Estimate: small
   - Kind: refactor
   - Depends: T1
   - Notes: Delete each script's own inline `resolveCli()` function; import `resolveCli` from `./resolve-cli.mts` instead. The rest of each script (computing `here`, calling `resolveCli(here)`, `spawnSync`-ing the result with forwarded argv, propagating the exit code) is unchanged — this is a like-for-like swap of the resolution function's source, not a behavior change to the scripts' own structure.
 
-- [ ] `T4` — Update `SKILL.md`'s resolution-order documentation
+- [x] `T4` — Update `SKILL.md`'s resolution-order documentation
   - Files: `.claude/skills/video-generator/SKILL.md`
   - Estimate: small
   - Kind: docs
