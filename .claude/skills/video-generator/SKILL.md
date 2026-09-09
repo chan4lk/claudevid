@@ -16,13 +16,16 @@ entirely by the pipeline.
 claudevid CLI rather than reimplementing validate/render logic — so the CLI has to be reachable
 first. They locate it in one of three ways, in this order:
 
-1. **Installed as a dependency** (a consumer project): `claudevid` resolved from `node_modules`.
-   Install it with `npm install claudevid`.
-2. **Installed globally** (`npm install -g claudevid`), so its bin is on `PATH`. This is the
+1. **Inside the claudevid monorepo**: `packages/cli/dist/cli.js`, which exists only after
+   `pnpm build` at the repo root. This is checked first and wins unconditionally whenever that
+   path exists relative to the script — i.e. whenever it's running from inside, or alongside, a
+   claudevid monorepo checkout — even if a local dependency or global install is also present.
+2. **Installed as a dependency** (a consumer project): `claudevid` resolved from `node_modules`.
+   Install it with `npm install claudevid`. Only checked when no monorepo checkout is present.
+3. **Installed globally** (`npm install -g claudevid`), so its bin is on `PATH`. This is the
    layout that suits a non-Node host project — a Python or Go repo gets the skill folder alone,
-   with no `package.json` or `node_modules` of its own.
-3. **Inside the claudevid monorepo**: `packages/cli/dist/cli.js`, which exists only after
-   `pnpm build` at the repo root.
+   with no `package.json` or `node_modules` of its own. Also only checked when no monorepo
+   checkout is present.
 
 If none is present the wrapper fails with a message naming all three options.
 
