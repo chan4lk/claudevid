@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { videoSpecSchema } from "../src/schema.js";
+import { chunkNarrationText } from "../src/narration-chunking.js";
 
 describe("videoSpecSchema", () => {
   it("defaults width/height/fps when omitted", () => {
@@ -95,6 +96,47 @@ describe("videoSpecSchema", () => {
         scenes: [{ id: "a", duration: 1, layers: [], narration: [{ voice: "x" }] }],
       });
       expect(result.success).toBe(false);
+    });
+
+    it("leaves a single under-threshold narration block unaffected — same single-block shape as before chunking (AC2)", () => {
+      const text = "A short line of narration well under the chunking threshold.";
+      const result = videoSpecSchema.safeParse({
+        version: 1,
+        scenes: [
+          { id: "a", duration: 1, layers: [], narration: { text, voice: "narrator-1", speed: 1.2 } },
+        ],
+      });
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.scenes[0]!.narration).toEqual([{ text, voice: "narrator-1", speed: 1.2 }]);
+      }
+    });
+
+    it("splits an over-length narration block into multiple NarrationBlocks carrying the original voice/speed (AC1)", () => {
+      const sentence =
+        "This is a test sentence used only to pad out the narration text so it exceeds the safe word threshold and triggers chunking.";
+      const longText = `${sentence} ${sentence} ${sentence} ${sentence} ${sentence}`;
+      const expectedChunks = chunkNarrationText(longText);
+      expect(expectedChunks.length).toBeGreaterThan(1);
+
+      const result = videoSpecSchema.safeParse({
+        version: 1,
+        scenes: [
+          {
+            id: "a",
+            duration: 1,
+            layers: [],
+            narration: { text: longText, voice: "narrator-1", speed: 1.2 },
+          },
+        ],
+      });
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.scenes[0]!.narration).toEqual(
+          expectedChunks.map((text) => ({ text, voice: "narrator-1", speed: 1.2 }))
+        );
+      }
     });
   });
 });

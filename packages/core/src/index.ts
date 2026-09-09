@@ -8,6 +8,8 @@ export { registerLayer } from "./layers.js";
 
 export { generateJsonSchema } from "./json-schema.js";
 
+export { chunkNarrationText, MAX_SAFE_NARRATION_WORDS } from "./narration-chunking.js";
+
 export {
   linear,
   easeInQuad,
