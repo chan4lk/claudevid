@@ -64,6 +64,43 @@ describe("runValidate (FR2/AC2)", () => {
     expect(result.message).toContain("1 auto-duration");
   });
 
+  it("reports no narration-normalization line when every scene's narration is under the auto-split threshold (011 AC6)", () => {
+    const spec = JSON.stringify({
+      version: 1,
+      width: 1920,
+      height: 1080,
+      fps: 30,
+      scenes: [
+        { id: "a", duration: 3, layers: [] },
+        { id: "b", duration: "auto", layers: [], narration: "hi" },
+      ],
+    });
+
+    const result = runValidate("spec.json", { readFile: () => spec });
+
+    expect(result.ok).toBe(true);
+    expect(result.message).not.toContain("normalized");
+    expect(result.message).toBe("2 scenes, ~3s (1 auto-duration)");
+  });
+
+  it("reports the scene id and authored-vs-resolved block counts when narration is auto-split (011 AC5)", () => {
+    const longSentence = "This is one sentence with several words in it to build up the count. ";
+    const longNarration = longSentence.repeat(15); // well over MAX_SAFE_NARRATION_WORDS (90)
+
+    const spec = JSON.stringify({
+      version: 1,
+      width: 1920,
+      height: 1080,
+      fps: 30,
+      scenes: [{ id: "intro", duration: "auto", layers: [], narration: longNarration }],
+    });
+
+    const result = runValidate("spec.json", { readFile: () => spec });
+
+    expect(result.ok).toBe(true);
+    expect(result.message).toMatch(/scene "intro": narration normalized from 1 authored block to \d+ sub-blocks/);
+  });
+
   it("reports failure with the missing field's JSON pointer for an invalid spec", () => {
     const result = runValidate("spec.json", { readFile: () => INVALID_SPEC });
 

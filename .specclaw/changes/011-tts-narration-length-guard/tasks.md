@@ -40,21 +40,21 @@ change.
 
 ### Wave 3 — Everything downstream of the schema wiring (parallel — no shared files)
 
-- [~] `T4` — Extend schema tests for the chunking transform
+- [x] `T4` — Extend schema tests for the chunking transform
   - Files: `packages/core/test/schema.test.ts`
   - Estimate: small
   - Kind: test
   - Depends: T3
   - Notes: An over-length authored block resolves to multiple `NarrationBlock`s in `parseSpec`'s output, each carrying the original `voice`/`speed` (spec.md AC1). An under-threshold authored block resolves to the same single-block shape produced today — byte-identical to pre-change output (spec.md AC2), including the existing bare-string/single-object/array input-shape tests already in this file.
 
-- [~] `T5` — Report authored-vs-resolved narration block counts in `runValidate`
+- [x] `T5` — Report authored-vs-resolved narration block counts in `runValidate`
   - Files: `packages/cli/src/commands/validate.ts`
   - Estimate: small
   - Kind: impl
   - Depends: T3
   - Notes: Using the raw parsed JSON already in scope (before `parseSpec(json)`), count each scene's authored `narration` field the same way `narrationSchema`'s shape-normalization does (`Array.isArray(v) ? v.length : v == null ? 0 : 1`). After a successful parse, compare against `spec.scenes[i].narration.length`; for any scene where they differ, append a line naming the scene and both counts to the existing summary message. No change to the message when no scene's counts differ (spec.md AC6).
 
-- [~] `T7` — End-to-end duration check via the render pipeline's injectable `synthesizeFn`
+- [x] `T7` — End-to-end duration check via the render pipeline's injectable `synthesizeFn`
   - Files: `packages/cli/test/render-pipeline.test.ts`
   - Estimate: small
   - Kind: test
@@ -70,7 +70,7 @@ change.
 
 ### Wave 4 — `validate`'s reporting tests (depends on Wave 3's `validate.ts` change)
 
-- [ ] `T6` — Tests for `validate`'s auto-split reporting
+- [x] `T6` — Tests for `validate`'s auto-split reporting
   - Files: `packages/cli/test/validate.test.ts`
   - Estimate: small
   - Kind: test
