@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { layerUnion, checkNestingDepth, MAX_GROUP_NESTING_DEPTH } from "./layers.js";
+import { chunkNarrationText } from "./narration-chunking.js";
 import type {
   Scene as SceneType,
   VideoSpec as VideoSpecType,
@@ -36,12 +37,16 @@ export const narrationBlockSchema: z.ZodType<NarrationBlockType> = z.object({
 // z.preprocess's TS types always widen its _input to `unknown` (the preprocess function itself
 // accepts unknown), so the cast below narrows it back to the shape we actually accept — the
 // runtime behavior is unaffected, only the static type this schema presents to its callers.
-const narrationSchema = z.preprocess((value) => {
-  if (Array.isArray(value)) return value;
-  if (typeof value === "string") return [{ text: value }];
-  if (value && typeof value === "object") return [value];
-  return value;
-}, z.array(narrationBlockSchema)) as unknown as z.ZodType<
+const narrationSchema = z
+  .preprocess((value) => {
+    if (Array.isArray(value)) return value;
+    if (typeof value === "string") return [{ text: value }];
+    if (value && typeof value === "object") return [value];
+    return value;
+  }, z.array(narrationBlockSchema))
+  .transform((blocks) =>
+    blocks.flatMap((block) => chunkNarrationText(block.text).map((text) => ({ ...block, text })))
+  ) as unknown as z.ZodType<
   NarrationBlockType[],
   z.ZodTypeDef,
   string | NarrationBlockType | NarrationBlockType[]
