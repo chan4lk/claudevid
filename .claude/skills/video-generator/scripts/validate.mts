@@ -10,35 +10,12 @@
 //      with no package.json or node_modules of its own.
 //   3. Inside the claudevid monorepo, at `packages/cli/dist/cli.js` relative to the repo root.
 import { spawnSync } from "node:child_process";
-import { createRequire } from "node:module";
-import { existsSync } from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
+import { resolveCli } from "./resolve-cli.mts";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
-/** Returns `{ command, prefixArgs }` — a global install is invoked through its own bin (which
- * carries the right shebang), while a resolved module path is handed to `node` explicitly. */
-function resolveCli() {
-  try {
-    return { command: "node", prefixArgs: [createRequire(path.join(here, "noop.js")).resolve("claudevid/cli")] };
-  } catch {
-    // Not a dependency of this project — try a global install next.
-  }
-
-  const onPath = spawnSync("claudevid", ["--version"], { stdio: "ignore" });
-  if (!onPath.error) return { command: "claudevid", prefixArgs: [] };
-
-  const inMonorepo = path.resolve(here, "../../../../packages/cli/dist/cli.js");
-  if (existsSync(inMonorepo)) return { command: "node", prefixArgs: [inMonorepo] };
-
-  throw new Error(
-    "Could not locate the claudevid CLI. Install it in this project (`npm install claudevid`), " +
-      "install it globally (`npm install -g claudevid`), or run this script from inside the " +
-      "claudevid monorepo after `pnpm build`.",
-  );
-}
-
-const { command, prefixArgs } = resolveCli();
+const { command, prefixArgs } = resolveCli(here);
 const result = spawnSync(command, [...prefixArgs, "validate", ...process.argv.slice(2)], { stdio: "inherit" });
 process.exit(result.status ?? 1);
