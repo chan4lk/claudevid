@@ -176,8 +176,35 @@ npm install /path/to/claudevid-${PKG_VERSION}.tgz
   \`\`\`
 
 - **Narration downloads a model on first use.** Kokoro (~330 MB) is fetched from Hugging Face by
-  \`@huggingface/transformers\` the first time a spec with \`narration\` is rendered, and cached
-  under \`.claudevid/\` in your project. Specs without \`narration\` need no model and no network.
+  \`@huggingface/transformers\` the first time a spec with \`narration\` is rendered. Forced
+  alignment (\`--captions\`) additionally fetches a Whisper ASR model. Specs without
+  \`narration\` need no model and no network.
+
+## Where models are cached
+
+Model weights are cached **once per machine**, not once per project — they are immutable and
+identical everywhere, so a second project reuses the first one's download:
+
+| | Default location |
+|---|---|
+| macOS | \`~/Library/Caches/claudevid/models\` |
+| Linux | \`~/.cache/claudevid/models\` (or \`$XDG_CACHE_HOME/claudevid/models\`) |
+| Windows | \`%LOCALAPPDATA%\\claudevid\\Cache\\models\` |
+
+Override with **\`CLAUDEVID_MODELS_DIR\`**, which is used verbatim (nothing is appended). That is
+the escape hatch for sandboxed CI or containers with no writable \`$HOME\`:
+
+\`\`\`bash
+CLAUDEVID_MODELS_DIR=/mnt/models npx claudevid render spec.json --out video.mp4
+\`\`\`
+
+\`npx claudevid models install\` prints the path it resolved, so you can always ask where the
+weights went. The **synthesis** cache is separate and stays per-project, under
+\`.claudevid/cache/tts/\` — it is keyed to that project's narration text.
+
+If you used a version before this change, an existing \`<project>/.claudevid/cache/models/\` is
+moved to the machine-wide location automatically on the next run, rather than re-downloaded. Other
+projects keep their own copies; delete those by hand to reclaim the space.
 
 ## CLI
 
@@ -219,6 +246,12 @@ they work from any directory depth once \`claudevid\` is installed.
 
 ## Known issues
 
+- **Concurrent cold model downloads can corrupt the shared cache.** Two \`claudevid\` processes
+  fetching the same not-yet-cached model into the machine-wide directory at the same time can
+  interleave their writes — \`@huggingface/transformers\` streams straight to the final path with
+  no lock. The symptom is a truncated \`.onnx\` and an ONNX load failure. Recovery: delete the
+  model directory and re-run. To avoid it, run \`claudevid models install\` once before starting
+  parallel jobs, or give each job its own \`CLAUDEVID_MODELS_DIR\`.
 - \`render\` emits no progress output at all until it completes. On a two-minute 1080p video
   that is several minutes of silence. \`pipe.onProgress\` exists internally but is not wired to
   the CLI.

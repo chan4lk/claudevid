@@ -30,7 +30,10 @@ first. They locate it in one of three ways, in this order:
 If none is present the wrapper fails with a message naming all three options.
 
 Rendering also needs **FFmpeg on `PATH`**, and a spec containing `narration` downloads the Kokoro
-TTS model (~330 MB) on first use. Specs without narration need neither a model nor network.
+TTS model (~330 MB) on first use, into a machine-wide cache (`~/Library/Caches/claudevid/models`
+on macOS, `~/.cache/claudevid/models` on Linux; override with `$CLAUDEVID_MODELS_DIR`) — so it is
+fetched once per machine, not once per project. Specs without narration need neither a model nor
+network.
 
 Narration length is handled automatically: a `narration` block long enough to risk Kokoro's own
 per-call token limit is split into several shorter, sentence-aligned blocks at spec-parse time, so
