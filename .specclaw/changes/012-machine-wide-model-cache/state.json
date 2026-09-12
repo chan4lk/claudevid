@@ -1,0 +1,12 @@
+{
+  "change": "012-machine-wide-model-cache",
+  "phase": "verify",
+  "branch": "",
+  "phases": {
+    "spec": {"status":"done","at":"2026-09-12T07:56:45Z"},
+    "design": {"status":"done","at":"2026-09-12T07:58:02Z"},
+    "tasks": {"status":"done","at":"2026-09-12T07:58:49Z"},
+    "build": {"status":"done","at":"2026-09-12T08:07:42Z"},
+    "verify": {"status":"done","at":"2026-09-12T08:07:43Z"}
+  }
+}

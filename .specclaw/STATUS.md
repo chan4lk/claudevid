@@ -1,7 +1,7 @@
 # 🦞 SpecClaw Dashboard
 
 **Project:** claudevid
-**Last Updated:** 2026-09-09 17:42 UTC
+**Last Updated:** 2026-09-12 08:08 UTC
 
 ## Active Changes
 
@@ -17,11 +17,11 @@
 - 🔨 **009-text-layer-centering** — build failed | 2/2 tasks (100%) | 0 failed
 - 🔍 **010-cli-resolution-freshness** — verify PASS | 4/4 tasks (100%) | 0 failed
 - 🔍 **011-tts-narration-length-guard** — verify PASS | 8/8 tasks (100%) | 0 failed
+- 🔍 **012-machine-wide-model-cache** — verify done | 9/9 tasks (100%) | 0 failed
 
 ## Pending Proposals
 
-
-- 📋 **012-machine-wide-model-cache** — proposal ready, awaiting planning
+_None._
 
 ## Recently Completed
 
@@ -29,6 +29,6 @@ _None._
 
 ## Stats
 
-- **Total changes:** 11
-- **Active:** 11
+- **Total changes:** 12
+- **Active:** 12
 - **Completed:** 0
