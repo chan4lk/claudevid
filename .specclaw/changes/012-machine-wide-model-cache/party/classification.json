@@ -1,0 +1,4 @@
+{"tier": "deep",
+ "domains": ["data"],
+ "rationale": "Open Question 2 about @huggingface/transformers concurrency safety is unresolved and its answer would require adding lock mechanisms to scope if the library is not safe for concurrent writes.",
+ "signals": {"blast_radius": "~8 files in audio subsystem (cache-root, tts, align, models, commands, docs); first time the application writes outside the project directory", "unresolved": "Whether @huggingface/transformers hub client is safe for concurrent writes into a machine-wide cache; if not, lockfile or wrapper enters scope", "irreversibility": "Code is revertible via git; but users will populate machine-wide caches that become orphaned dependencies if the feature reverts"}}

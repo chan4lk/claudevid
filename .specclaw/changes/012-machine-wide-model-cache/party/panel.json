@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "sig": "3309667038 7837",
+  "tier": "deep",
+  "tier_source": "classifier",
+  "rationale": "Open Question 2 about @huggingface/transformers concurrency safety is unresolved and its answer would require adding lock mechanisms to scope if the library is not safe for concurrent writes.",
+  "domains": ["data"],
+  "seats": [
+    {"role": "party-po", "model": "sonnet"},
+    {"role": "party-architect", "model": "opus"},
+    {"role": "party-ba", "model": "sonnet"},
+    {"role": "party-security", "model": "opus"},
+    {"role": "party-visionary", "model": "fable"}
+  ],
+  "dropped": []
+}

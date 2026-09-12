@@ -1,7 +1,7 @@
 # 🦞 SpecClaw Dashboard
 
 **Project:** claudevid
-**Last Updated:** 2026-09-09 07:25 UTC
+**Last Updated:** 2026-09-09 17:42 UTC
 
 ## Active Changes
 
@@ -20,7 +20,8 @@
 
 ## Pending Proposals
 
-_None._
+
+- 📋 **012-machine-wide-model-cache** — proposal ready, awaiting planning
 
 ## Recently Completed
 
