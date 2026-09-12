@@ -48,12 +48,17 @@ function rmrf(target) {
   fs.rmSync(target, { recursive: true, force: true });
 }
 
-function copyDir(from, to) {
+/** Copies a tree, skipping any entry `exclude` matches by name. The skill directory doubles as a
+ * working directory when the skill is exercised in-repo, so it accumulates `.claudevid/` — the
+ * runtime cache holding the ~325 MB Kokoro model. That is gitignored local state, not source, and
+ * copying it inflates the tarball ~150x. */
+function copyDir(from, to, exclude = () => false) {
   fs.mkdirSync(to, { recursive: true });
   for (const entry of fs.readdirSync(from, { withFileTypes: true })) {
+    if (exclude(entry.name)) continue;
     const src = path.join(from, entry.name);
     const dest = path.join(to, entry.name);
-    if (entry.isDirectory()) copyDir(src, dest);
+    if (entry.isDirectory()) copyDir(src, dest, exclude);
     else fs.copyFileSync(src, dest);
   }
 }
@@ -110,7 +115,7 @@ copyDir(path.join(ROOT, "templates"), path.join(OUT, "templates"));
 
 // The Claude Code skill, copied verbatim — its scripts already resolve the CLI through Node
 // resolution, so they work unchanged once this package is a dependency of the host project.
-copyDir(SKILL_SRC, path.join(OUT, "skill"));
+copyDir(SKILL_SRC, path.join(OUT, "skill"), (name) => name === ".claudevid");
 
 // --- 3. package.json --------------------------------------------------------------------------
 
