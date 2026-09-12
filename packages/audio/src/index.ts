@@ -6,7 +6,10 @@
 
 export type { SynthesisRequest, CachedSynthesis, AudioDurationsOptions } from "./types.js";
 export type { WordTiming, AlignRequest, AlignResult } from "./word-timing-types.js";
-export { resolveCacheRoot, resolveCacheSubdir } from "./cache-root.js";
+export { resolveCacheRoot, resolveCacheSubdir, resolveModelsRoot } from "./cache-root.js";
+export type { ModelsRootOptions } from "./cache-root.js";
+export { migrateProjectModelsCache } from "./models-migration.js";
+export type { MigrationResult } from "./models-migration.js";
 export { synthesize } from "./tts.js";
 export type { PinnedModel } from "./models.js";
 export { PINNED_MODEL, ModelDigestMismatchError, installModels, verifyInstalledModel, resolveModelFilePath } from "./models.js";

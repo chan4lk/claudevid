@@ -8,7 +8,7 @@
 //   1. ASR (production path only, bypassed entirely by `opts.asrFn` in tests) — lazily loads
 //      `@huggingface/transformers`'s `automatic-speech-recognition` pipeline (Whisper, ONNX),
 //      the same runtime tts.ts already depends on for Kokoro (design.md D1: one native runtime,
-//      not two), routed through the same shared cache root (`resolveCacheSubdir("models")`).
+//      not two), routed through the same machine-wide model root (`resolveModelsRoot()`, 012 FR4).
 //   2. Reconciliation (always runs, real logic, pure/testable without inference) — an
 //      edit-distance (Levenshtein-style) DP alignment between the raw recognized word stream and
 //      `referenceText`'s tokenization (design.md D2's concrete pick; see `reconcileWords` below).
@@ -22,7 +22,8 @@ import { env, pipeline } from "@huggingface/transformers";
 import type { AutomaticSpeechRecognitionPipelineType } from "@huggingface/transformers";
 import * as path from "node:path";
 
-import { resolveCacheSubdir } from "./cache-root.js";
+import { resolveModelsRoot } from "./cache-root.js";
+import { migrateProjectModelsCache } from "./models-migration.js";
 import type { AlignRequest, AlignResult, WordTiming } from "./word-timing-types.js";
 
 /** One raw recognized word from the ASR pipeline (or a test fixture standing in for it) — a
@@ -78,11 +79,17 @@ let asrPipelinePromise: Promise<AutomaticSpeechRecognitionPipelineType> | null =
 
 function loadAsrPipeline(): Promise<AutomaticSpeechRecognitionPipelineType> {
   if (!asrPipelinePromise) {
-    // Route `@huggingface/transformers`'s hub client through this package's shared cache root
-    // (design.md's "one cache root" decision) instead of its own default — same line tts.ts's
-    // `loadKokoro` uses for Kokoro's own downloads.
-    env.cacheDir = resolveCacheSubdir("models") + path.sep;
-    asrPipelinePromise = pipeline("automatic-speech-recognition", ASR_MODEL_ID, { dtype: "fp32" });
+    asrPipelinePromise = (async () => {
+      // Carry a pre-012 project-local cache across rather than re-downloading (012 FR7).
+      // Best-effort and never throws.
+      await migrateProjectModelsCache();
+      // Route `@huggingface/transformers`'s hub client through the machine-wide model root (012
+      // FR4) instead of its own default — same two lines tts.ts's `loadKokoro` uses. Whisper is
+      // pinned model weights too, so it shares the root: "pinned weights", not "Kokoro", is what
+      // that root means.
+      env.cacheDir = resolveModelsRoot() + path.sep;
+      return pipeline("automatic-speech-recognition", ASR_MODEL_ID, { dtype: "fp32" });
+    })();
   }
   return asrPipelinePromise;
 }

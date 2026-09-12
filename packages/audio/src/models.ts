@@ -19,7 +19,8 @@ import { createHash } from "node:crypto";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 
-import { resolveCacheSubdir } from "./cache-root.js";
+import { resolveModelsRoot } from "./cache-root.js";
+import { migrateProjectModelsCache } from "./models-migration.js";
 
 /** Shape of a pinned model descriptor: what to fetch, what filename to cache it under, and the
  * SHA-256 digest it must match. `installModels`/`verifyInstalledModel` accept an optional
@@ -79,17 +80,21 @@ function sha256Hex(bytes: Buffer): string {
 }
 
 /** Resolves the local cache path a given `model` is (or would be) stored at:
- * `<cache root>/models/<model.fileName>` (spec.md FR7 — via `resolveCacheSubdir("models", ...)`,
- * the one shared cache-root helper `cache.ts` also uses). Pure path arithmetic, no filesystem
- * access — exported so tests can locate the exact file `installModels` writes (e.g. to corrupt it
- * for AC10's "deliberately corrupted local cache file" case) without duplicating this logic. */
-export function resolveModelFilePath(model: PinnedModel = PINNED_MODEL, projectRoot?: string): string {
-  return path.join(resolveCacheSubdir("models", projectRoot), model.fileName);
+ * `<machine-wide models root>/<model.fileName>` (012 spec.md FR4 — via `resolveModelsRoot()`, the
+ * one helper `tts.ts` and `align.ts` also use). Pure path arithmetic, no filesystem access —
+ * exported so tests can locate the exact file `installModels` writes (e.g. to corrupt it for
+ * AC10's "deliberately corrupted local cache file" case) without duplicating this logic.
+ *
+ * The second parameter is `modelsRoot`, not `projectRoot`: since 012 this path is machine-wide,
+ * and a parameter still named `projectRoot` while holding a machine-wide path is exactly how the
+ * per-directory re-download bug comes back (012 design.md D3). */
+export function resolveModelFilePath(model: PinnedModel = PINNED_MODEL, modelsRoot?: string): string {
+  return path.join(modelsRoot ?? resolveModelsRoot(), model.fileName);
 }
 
 /** Downloads `model.url` (default: `PINNED_MODEL`), verifies its SHA-256 digest against
  * `model.digest`, and only then writes it into the local models cache
- * (`resolveModelFilePath(model, projectRoot)`) — spec.md FR6, AC10.
+ * (`resolveModelFilePath(model, modelsRoot)`) — spec.md FR6, AC10.
  *
  * Fail-closed on a digest mismatch (design.md D6): throws `ModelDigestMismatchError` *before*
  * writing anything, so a mismatched download never lands on disk claiming to be valid — there is
@@ -98,15 +103,19 @@ export function resolveModelFilePath(model: PinnedModel = PINNED_MODEL, projectR
  * `fetchFn` defaults to the global `fetch` (the only network call this module ever makes — FR6's
  * "no network access outside the explicit install command"); tests inject a fake `fetchFn` that
  * returns controlled bytes with no real HTTP request, mirroring tts.ts's `synthesize()` and
- * encoder-ffmpeg's probe.ts's `execFn` injection seam. `projectRoot`/`model` are test seams too —
- * production call sites pass neither and get the real cache root and `PINNED_MODEL`. */
+ * encoder-ffmpeg's probe.ts's `execFn` injection seam. `modelsRoot`/`model` are test seams too —
+ * production call sites pass neither and get the real machine-wide root and `PINNED_MODEL`. */
 export async function installModels(opts?: {
   fetchFn?: typeof fetch;
-  projectRoot?: string;
+  modelsRoot?: string;
   model?: PinnedModel;
 }): Promise<void> {
   const model = opts?.model ?? PINNED_MODEL;
   const fetchFn = opts?.fetchFn ?? fetch;
+
+  // Carry a pre-012 project-local cache across before writing, so an explicit install doesn't
+  // strand weights the user already has (012 FR7). Best-effort; never throws.
+  await migrateProjectModelsCache({ modelsRoot: opts?.modelsRoot });
 
   const response = await fetchFn(model.url);
   if (!response.ok) {
@@ -123,7 +132,7 @@ export async function installModels(opts?: {
     throw new ModelDigestMismatchError(model.id, model.digest, actualDigest);
   }
 
-  const finalPath = resolveModelFilePath(model, opts?.projectRoot);
+  const finalPath = resolveModelFilePath(model, opts?.modelsRoot);
   await fs.mkdir(path.dirname(finalPath), { recursive: true });
   // Write-to-temp-then-rename, same atomicity discipline as cache.ts's entries (spec.md FR4) —
   // a reader of `finalPath` never observes a partially-written file.
@@ -146,11 +155,11 @@ export async function installModels(opts?: {
  *   distinct, actionable failure from "not installed," and design.md D6 requires failing closed
  *   (never silently re-downloading) here. */
 export async function verifyInstalledModel(opts?: {
-  projectRoot?: string;
+  modelsRoot?: string;
   model?: PinnedModel;
 }): Promise<boolean> {
   const model = opts?.model ?? PINNED_MODEL;
-  const filePath = resolveModelFilePath(model, opts?.projectRoot);
+  const filePath = resolveModelFilePath(model, opts?.modelsRoot);
 
   let bytes: Buffer;
   try {

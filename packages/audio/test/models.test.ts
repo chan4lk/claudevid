@@ -2,9 +2,10 @@
 // injects a fake `fetchFn` and a test-local `PinnedModel` descriptor — never the real
 // `PINNED_MODEL` (whose digest is a placeholder no fixture's bytes could ever match, and whose
 // URL must never actually be requested here) — so nothing in this file makes a real network
-// call. Each test also passes an explicit `projectRoot` under a fresh `os.tmpdir()` directory, so
-// nothing here touches this repo's real `.claudevid/cache/` (same isolation pattern as
-// cache-root.test.ts's explicit `projectRoot` override).
+// call. Each test also passes an explicit `modelsRoot` under a fresh `os.tmpdir()` directory, so
+// nothing here touches the real machine-wide model cache (012 NFR2) — since change 012 that root
+// is shared by every project on the machine, which makes writing to the real one during a test
+// considerably worse than it used to be.
 
 import { createHash } from "node:crypto";
 import * as fs from "node:fs/promises";
@@ -38,14 +39,14 @@ function fakeFetch(bytes: Buffer): typeof fetch {
 }
 
 describe("models.ts (FR6, AC10)", () => {
-  let projectRoot: string;
+  let modelsRoot: string;
 
   beforeEach(async () => {
-    projectRoot = await fs.mkdtemp(path.join(os.tmpdir(), "claudevid-models-test-"));
+    modelsRoot = await fs.mkdtemp(path.join(os.tmpdir(), "claudevid-models-test-"));
   });
 
   afterEach(async () => {
-    await fs.rm(projectRoot, { recursive: true, force: true });
+    await fs.rm(modelsRoot, { recursive: true, force: true });
   });
 
   const validBytes = Buffer.from("a fake kokoro model file's bytes, for test purposes only");
@@ -57,9 +58,9 @@ describe("models.ts (FR6, AC10)", () => {
   };
 
   it("installModels: fetches, verifies, and writes the file when the digest matches", async () => {
-    await installModels({ fetchFn: fakeFetch(validBytes), projectRoot, model: validModel });
+    await installModels({ fetchFn: fakeFetch(validBytes), modelsRoot, model: validModel });
 
-    const filePath = resolveModelFilePath(validModel, projectRoot);
+    const filePath = resolveModelFilePath(validModel, modelsRoot);
     const written = await fs.readFile(filePath);
     expect(written.equals(validBytes)).toBe(true);
   });
@@ -68,32 +69,32 @@ describe("models.ts (FR6, AC10)", () => {
     const wrongDigestModel: PinnedModel = { ...validModel, digest: "f".repeat(64) };
 
     await expect(
-      installModels({ fetchFn: fakeFetch(validBytes), projectRoot, model: wrongDigestModel }),
+      installModels({ fetchFn: fakeFetch(validBytes), modelsRoot, model: wrongDigestModel }),
     ).rejects.toThrow(ModelDigestMismatchError);
 
-    const filePath = resolveModelFilePath(wrongDigestModel, projectRoot);
+    const filePath = resolveModelFilePath(wrongDigestModel, modelsRoot);
     await expect(fs.readFile(filePath)).rejects.toMatchObject({ code: "ENOENT" });
   });
 
   it("verifyInstalledModel: returns false when no file has been installed yet", async () => {
-    await expect(verifyInstalledModel({ projectRoot, model: validModel })).resolves.toBe(false);
+    await expect(verifyInstalledModel({ modelsRoot, model: validModel })).resolves.toBe(false);
   });
 
   it("verifyInstalledModel: returns true for a freshly installed, matching file", async () => {
-    await installModels({ fetchFn: fakeFetch(validBytes), projectRoot, model: validModel });
+    await installModels({ fetchFn: fakeFetch(validBytes), modelsRoot, model: validModel });
 
-    await expect(verifyInstalledModel({ projectRoot, model: validModel })).resolves.toBe(true);
+    await expect(verifyInstalledModel({ modelsRoot, model: validModel })).resolves.toBe(true);
   });
 
   it("verifyInstalledModel: throws ModelDigestMismatchError on a deliberately corrupted cache file (AC10)", async () => {
-    await installModels({ fetchFn: fakeFetch(validBytes), projectRoot, model: validModel });
+    await installModels({ fetchFn: fakeFetch(validBytes), modelsRoot, model: validModel });
 
     // Deliberately corrupt the cached file in place — simulates a stale/mismatched file left
     // behind by e.g. a library upgrade with no reinstall (spec.md Edge Cases).
-    const filePath = resolveModelFilePath(validModel, projectRoot);
+    const filePath = resolveModelFilePath(validModel, modelsRoot);
     await fs.writeFile(filePath, Buffer.from("corrupted, not the real model bytes"));
 
-    await expect(verifyInstalledModel({ projectRoot, model: validModel })).rejects.toThrow(
+    await expect(verifyInstalledModel({ modelsRoot, model: validModel })).rejects.toThrow(
       ModelDigestMismatchError,
     );
   });

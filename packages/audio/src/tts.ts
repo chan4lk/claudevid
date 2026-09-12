@@ -5,13 +5,14 @@
 // every test except the gated live-model integration test (AC9, a later task's tts.live.test.ts)
 // substitutes a fixture instead of loading Kokoro at all.
 //
-// Model resolution (spec.md FR6, design.md D2/D5): the model id loaded here is `models.ts`'s
-// `PINNED_MODEL.id` — the single committed source of truth for "which model" — and the
-// underlying `@huggingface/transformers` runtime's cache directory is pointed at this package's
-// shared cache root (`resolveCacheSubdir("models")`, the same helper `models.ts` uses), so a
-// Kokoro download lands in the project's own cache, not an arbitrary OS-level HF cache, and is
-// reused (no re-download) on every subsequent call — this is what makes D2's "one cache root"
-// hold for Kokoro's own downloads too, not just `models.ts`'s standalone install/verify path.
+// Model resolution (spec.md FR6, design.md D5; 012 spec.md FR4): the model id loaded here is
+// `models.ts`'s `PINNED_MODEL.id` — the single committed source of truth for "which model" — and
+// the underlying `@huggingface/transformers` runtime's cache directory is pointed at the
+// machine-wide model root (`resolveModelsRoot()`, the same helper `models.ts` uses), so a Kokoro
+// download lands in one place per machine rather than once per directory `claudevid` runs in, and
+// is reused (no re-download) by every subsequent call and every other project. Change 006's D2
+// originally put this under the *project* cache root; 012 narrowed that — weights are immutable
+// and identical everywhere, so only the per-project synthesis cache stays per-project.
 //
 // Scope boundary, stated plainly: `@huggingface/transformers`'s own hub client manages a
 // multi-file cache tree (config, tokenizer, ONNX weight shards) for a model id, which has no
@@ -25,7 +26,8 @@ import { env } from "@huggingface/transformers";
 import { KokoroTTS } from "kokoro-js";
 import * as path from "node:path";
 
-import { resolveCacheSubdir } from "./cache-root.js";
+import { resolveModelsRoot } from "./cache-root.js";
+import { migrateProjectModelsCache } from "./models-migration.js";
 import { PINNED_MODEL } from "./models.js";
 import type { SynthesisRequest } from "./types.js";
 
@@ -37,12 +39,18 @@ let kokoroPromise: Promise<KokoroTTS> | null = null;
 
 function loadKokoro(): Promise<KokoroTTS> {
   if (!kokoroPromise) {
-    // Route `@huggingface/transformers`'s hub client through this package's shared cache root
-    // (design.md D2) instead of its own default `./.cache` — set once, before the first load.
-    env.cacheDir = resolveCacheSubdir("models") + path.sep;
-    // `device: "cpu"` — this package runs under `onnxruntime-node`, not a browser, so neither
-    // "wasm" nor "webgpu" (kokoro-js's other two device options) applies.
-    kokoroPromise = KokoroTTS.from_pretrained(PINNED_MODEL.id, { dtype: "fp32", device: "cpu" });
+    kokoroPromise = (async () => {
+      // Carry a pre-012 project-local cache across rather than re-downloading ~310 MB the user
+      // already has (012 FR7). Best-effort and never throws — a failure here just means the
+      // download below actually runs.
+      await migrateProjectModelsCache();
+      // Route `@huggingface/transformers`'s hub client through the machine-wide model root (012
+      // FR4) instead of its own default `./.cache` — set before the first load.
+      env.cacheDir = resolveModelsRoot() + path.sep;
+      // `device: "cpu"` — this package runs under `onnxruntime-node`, not a browser, so neither
+      // "wasm" nor "webgpu" (kokoro-js's other two device options) applies.
+      return KokoroTTS.from_pretrained(PINNED_MODEL.id, { dtype: "fp32", device: "cpu" });
+    })();
   }
   return kokoroPromise;
 }
