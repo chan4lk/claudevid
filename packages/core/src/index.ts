@@ -41,6 +41,6 @@ export type {
   Coordinate,
   Animation,
   Meta,
-  AudioTrack,
+  SceneAudio,
   PropertyBag,
 } from "./types.js";

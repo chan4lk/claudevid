@@ -1,4 +1,4 @@
-import type { Meta, AudioTrack } from "./schema.js";
+import type { Meta, SceneAudio } from "./schema.js";
 import type { Layer } from "./layers.js";
 
 export type {
@@ -10,7 +10,7 @@ export type {
   Coordinate,
   Animation,
 } from "./layers.js";
-export type { Meta, AudioTrack } from "./schema.js";
+export type { Meta, SceneAudio } from "./schema.js";
 export type { PropertyBag } from "./property-bag.js";
 
 export interface SceneTransition {
@@ -37,6 +37,8 @@ export interface Scene {
    * here.
    */
   narration?: NarrationBlock[];
+  /** Pre-recorded audio driving this scene's voice track. Mutually exclusive with `narration`. */
+  audio?: SceneAudio;
 }
 
 export interface VideoSpec {
@@ -46,6 +48,5 @@ export interface VideoSpec {
   fps: number;
   background?: string;
   meta?: Meta;
-  audio?: AudioTrack;
   scenes: Scene[];
 }
