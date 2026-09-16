@@ -80,6 +80,7 @@ export async function synthesize(request: SynthesisRequest): Promise<{ audio: Bu
   });
   return {
     audio: float32ToInt16PcmBuffer(rawAudio.audio),
+    // Kokoro's `sampling_rate` is 24 kHz in production, i.e. `decode.ts`'s `VOICE_TRACK_SAMPLE_RATE`.
     sampleRate: rawAudio.sampling_rate,
   };
 }
