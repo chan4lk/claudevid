@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "sig": "1006309798 7077",
+  "tier": "deep",
+  "tier_source": "classifier",
+  "rationale": "One unresolved design question (whether padStart/padEnd belong in the schema or callers pre-pad their audio) whose answer changes the file list.",
+  "domains": ["data"],
+  "seats": [
+    {"role": "party-po", "model": "sonnet"},
+    {"role": "party-architect", "model": "opus"},
+    {"role": "party-ba", "model": "sonnet"},
+    {"role": "party-security", "model": "opus"},
+    {"role": "party-visionary", "model": "fable"}
+  ],
+  "dropped": []
+}

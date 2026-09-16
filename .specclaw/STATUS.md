@@ -1,7 +1,7 @@
 # 🦞 SpecClaw Dashboard
 
 **Project:** claudevid
-**Last Updated:** 2026-09-12 08:08 UTC
+**Last Updated:** 2026-09-16 02:20 UTC
 
 ## Active Changes
 
@@ -18,6 +18,7 @@
 - 🔍 **010-cli-resolution-freshness** — verify PASS | 4/4 tasks (100%) | 0 failed
 - 🔍 **011-tts-narration-length-guard** — verify PASS | 8/8 tasks (100%) | 0 failed
 - 🔍 **012-machine-wide-model-cache** — verify done | 9/9 tasks (100%) | 0 failed
+- 🔍 **013-scene-external-audio** — verify PASS | 8/8 tasks (100%) | 0 failed
 
 ## Pending Proposals
 
@@ -29,6 +30,6 @@ _None._
 
 ## Stats
 
-- **Total changes:** 12
-- **Active:** 12
+- **Total changes:** 13
+- **Active:** 13
 - **Completed:** 0
