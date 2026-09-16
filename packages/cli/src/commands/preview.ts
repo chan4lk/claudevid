@@ -12,7 +12,7 @@
 // it's supported today.
 
 import { readFileSync, writeFileSync, mkdirSync, watch as fsWatch } from "node:fs";
-import { join } from "node:path";
+import { dirname, join, resolve as resolvePath } from "node:path";
 
 import type { VideoSpec } from "@claudevid/core";
 import { parseSpec, compileTimeline } from "@claudevid/core";
@@ -21,6 +21,7 @@ import { createCanvas, ImageData } from "@napi-rs/canvas";
 
 import { ArgError, findFlagValue, hasFlag } from "../args.js";
 import { runRenderPipeline } from "../render-pipeline.js";
+import { resolveSceneAudioPaths } from "../scene-audio-paths.js";
 
 export const MAX_SHEET_FRAMES = 24;
 export const DEFAULT_SHEET_FRAMES = 6;
@@ -33,6 +34,9 @@ export interface PreviewCommandArgs {
   watch: boolean;
   sheetPath?: string;
   sheetFrames: number;
+  /** spec.md FR8 — extra allowed root for `scene.audio.src` resolution, in addition to the spec
+   * file's own directory. */
+  audioRoot?: string;
 }
 
 /** Pure argument parsing — no filesystem access (NFR2, mirrors tools/motion-preview/src/args.ts
@@ -45,6 +49,7 @@ export function parsePreviewArgs(argv: string[]): PreviewCommandArgs {
 
   const watch = hasFlag(argv, "--watch");
   const sheetPath = findFlagValue(argv, "--sheet");
+  const audioRoot = findFlagValue(argv, "--audio-root");
 
   const framesValue = findFlagValue(argv, "--frames");
   const sheetFrames = framesValue !== undefined ? Number(framesValue) : DEFAULT_SHEET_FRAMES;
@@ -55,7 +60,7 @@ export function parsePreviewArgs(argv: string[]): PreviewCommandArgs {
     throw new ArgError(`--frames must be at most ${MAX_SHEET_FRAMES}, got ${sheetFrames}`);
   }
 
-  return { specPath, watch, sheetPath, sheetFrames };
+  return { specPath, watch, sheetPath, sheetFrames, audioRoot };
 }
 
 /**
@@ -136,7 +141,7 @@ export async function renderContactSheet(
 /** Real (non-DI) `--watch` loop: re-reads, re-`parseSpec`s, and re-renders on every spec file
  * change, debounced 250ms. Never crashes the loop on a bad spec or a failed render — logs and
  * waits for the next change instead. Runs until the process is killed. */
-async function watchPreview(specPath: string, outputPath: string): Promise<void> {
+async function watchPreview(specPath: string, outputPath: string, audioRoot?: string): Promise<void> {
   const rerender = async (): Promise<void> => {
     try {
       const raw = readFileSync(specPath, "utf-8");
@@ -148,7 +153,19 @@ async function watchPreview(specPath: string, outputPath: string): Promise<void>
         return;
       }
 
-      const outcome = await runPreviewOnce(result.spec, { runRenderPipeline, outputPath });
+      // spec.md FR7: re-resolve `scene.audio.src` on every re-render (a relative `src` is
+      // resolved from the spec file's own, possibly-moved, directory each time — Edge Cases #4).
+      const specDir = dirname(resolvePath(specPath));
+      const resolved = resolveSceneAudioPaths(result.spec, { specDir, audioRoot });
+      if (!resolved.ok) {
+        const message = resolved.diagnostics
+          .map((d) => `${d.path}: ${d.message}${d.suggestion ? `, suggestion: ${d.suggestion}` : ""}`)
+          .join("\n");
+        console.error(`preview --watch: spec invalid, skipping this render:\n${message}`);
+        return;
+      }
+
+      const outcome = await runPreviewOnce(resolved.spec, { runRenderPipeline, outputPath });
       if (outcome.ok) {
         console.log(outcome.message);
       } else {
@@ -206,7 +223,20 @@ export async function runPreviewFromCli(argv: string[]): Promise<void> {
     return;
   }
 
-  const spec = result.spec;
+  // spec.md FR7: resolve every scene's `audio.src` immediately after a successful parseSpec,
+  // covering the single-shot and `--sheet` paths (`--watch` re-resolves on every re-render, in
+  // `watchPreview` above).
+  const specDir = dirname(resolvePath(args.specPath));
+  const resolved = resolveSceneAudioPaths(result.spec, { specDir, audioRoot: args.audioRoot });
+  if (!resolved.ok) {
+    const message = resolved.diagnostics
+      .map((d) => `${d.path}: ${d.message}${d.suggestion ? `, suggestion: ${d.suggestion}` : ""}`)
+      .join("\n");
+    console.error(message);
+    process.exitCode = 1;
+    return;
+  }
+  const spec = resolved.spec;
 
   if (args.sheetPath) {
     try {
@@ -225,7 +255,7 @@ export async function runPreviewFromCli(argv: string[]): Promise<void> {
   const outputPath = join(".claudevid", "preview.mp4");
 
   if (args.watch) {
-    await watchPreview(args.specPath, outputPath);
+    await watchPreview(args.specPath, outputPath, args.audioRoot);
     return;
   }
 

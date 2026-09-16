@@ -4,13 +4,23 @@
 // `/`, not a stack trace.
 
 import { readFileSync } from "node:fs";
+import { dirname, resolve as resolvePath } from "node:path";
 
 import { parseSpec } from "@claudevid/core";
 
-import { ArgError } from "../args.js";
+import { ArgError, findFlagValue } from "../args.js";
+import { resolveSceneAudioPaths } from "../scene-audio-paths.js";
 
 export interface ValidateDeps {
   readFile: (path: string) => string;
+  /** spec.md FR6/FR7 — defaults to the real `resolveSceneAudioPaths` when omitted. */
+  resolveSceneAudioPaths?: typeof resolveSceneAudioPaths;
+}
+
+export interface ValidateOptions {
+  /** spec.md FR8 — extra allowed root for `scene.audio.src` resolution, in addition to the spec
+   * file's own directory. */
+  audioRoot?: string;
 }
 
 export interface ValidateResult {
@@ -22,7 +32,7 @@ export interface ValidateResult {
 /**
  * Pure validation logic, testable with a fully injected `readFile` fake (no real disk I/O).
  */
-export function runValidate(specPath: string, deps: ValidateDeps): ValidateResult {
+export function runValidate(specPath: string, deps: ValidateDeps, options: ValidateOptions = {}): ValidateResult {
   const raw = deps.readFile(specPath);
 
   let json: unknown;
@@ -41,7 +51,20 @@ export function runValidate(specPath: string, deps: ValidateDeps): ValidateResul
     return { ok: false, sceneCount: 0, message };
   }
 
-  const { spec } = result;
+  // spec.md FR6/FR7: resolve every scene's `audio.src` immediately after a successful parseSpec,
+  // reporting failures in the same diagnostic shape (so a validate run reflects the same
+  // containment decision a render will make).
+  const resolveAudioPaths = deps.resolveSceneAudioPaths ?? resolveSceneAudioPaths;
+  const specDir = dirname(resolvePath(specPath));
+  const resolved = resolveAudioPaths(result.spec, { specDir, audioRoot: options.audioRoot });
+  if (!resolved.ok) {
+    const message = resolved.diagnostics
+      .map((d) => `${d.path}: ${d.message}${d.suggestion ? `, suggestion: ${d.suggestion}` : ""}`)
+      .join("\n");
+    return { ok: false, sceneCount: 0, message };
+  }
+
+  const { spec } = resolved;
   let totalSeconds = 0;
   let autoCount = 0;
   for (const scene of spec.scenes) {
@@ -91,11 +114,14 @@ export function runValidateFromCli(argv: string[]): void {
     throw new ArgError("validate requires a spec file path");
   }
 
+  const audioRoot = findFlagValue(argv, "--audio-root");
+
   const deps: ValidateDeps = {
     readFile: (path) => readFileSync(path, "utf-8"),
+    resolveSceneAudioPaths,
   };
 
-  const result = runValidate(specPath, deps);
+  const result = runValidate(specPath, deps, { audioRoot });
 
   if (result.ok) {
     console.log(result.message);

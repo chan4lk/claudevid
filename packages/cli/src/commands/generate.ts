@@ -5,6 +5,7 @@
 // running the shared render pipeline (FR9) against the freshly-written spec.
 
 import { writeFileSync } from "node:fs";
+import { dirname, resolve as resolvePath } from "node:path";
 
 import { parseSpec } from "@claudevid/core";
 import { generateSpec, buildDirectorPrompt, type BrandKitConfig } from "@claudevid/claude";
@@ -14,6 +15,7 @@ import { BUNDLED_LANGS, BUNDLED_THEMES } from "@claudevid/layer-code";
 import { ArgError, findFlagValue, hasFlag } from "../args.js";
 import { loadConfig } from "../config.js";
 import { runRenderPipeline } from "../render-pipeline.js";
+import { resolveSceneAudioPaths } from "../scene-audio-paths.js";
 
 /** Per spec.md Decisions — override via config `model` or `--model`; bumping this as models
  * change is a config edit, not a code change. */
@@ -25,6 +27,9 @@ export interface GenerateCommandArgs {
   render: boolean;
   model?: string;
   repairAttempts?: number;
+  /** spec.md FR8 — extra allowed root for `scene.audio.src` resolution, in addition to the
+   * directory the generated spec is written to. Only consulted when `render` is set. */
+  audioRoot?: string;
 }
 
 /** Pure argument parsing — no filesystem access. `argv[0]` is the prompt. */
@@ -37,6 +42,7 @@ export function parseGenerateArgs(argv: string[]): GenerateCommandArgs {
   const outPath = findFlagValue(argv, "--out");
   const model = findFlagValue(argv, "--model");
   const render = hasFlag(argv, "--render");
+  const audioRoot = findFlagValue(argv, "--audio-root");
 
   const repairAttemptsRaw = findFlagValue(argv, "--repair-attempts");
   const repairAttempts = repairAttemptsRaw !== undefined ? Number(repairAttemptsRaw) : undefined;
@@ -44,7 +50,7 @@ export function parseGenerateArgs(argv: string[]): GenerateCommandArgs {
     throw new ArgError("--repair-attempts must be a positive integer");
   }
 
-  return { prompt, outPath, render, model, repairAttempts };
+  return { prompt, outPath, render, model, repairAttempts, audioRoot };
 }
 
 /** Lowercases, replaces runs of non-alphanumerics with a single "-", trims leading/trailing "-",
@@ -68,6 +74,8 @@ export interface GenerateDeps {
   config: BrandKitConfig;
   writeFile: (path: string, content: string) => void;
   runRenderPipeline?: typeof runRenderPipeline;
+  /** spec.md FR6/FR7 — only consulted when `args.render` is set. */
+  resolveSceneAudioPaths: typeof resolveSceneAudioPaths;
 }
 
 export interface GenerateCommandResult {
@@ -125,8 +133,21 @@ export async function runGenerate(args: GenerateCommandArgs, deps: GenerateDeps)
   let message = `wrote ${outPath} (${result.attempts} ${attemptWord})`;
 
   if (args.render) {
+    // spec.md FR6/FR7: resolve `scene.audio.src` against the directory the spec was just written
+    // to, before rendering. Unlike a render/encode failure below, a bad audio path is a spec
+    // defect (the same class of failure `validate`/`render` reject outright), so it fails the
+    // command rather than being folded into the generate's own success.
+    const specDir = dirname(resolvePath(outPath));
+    const resolved = deps.resolveSceneAudioPaths(integrity.spec, { specDir, audioRoot: args.audioRoot });
+    if (!resolved.ok) {
+      const audioMessage = resolved.diagnostics
+        .map((d) => `${d.path}: ${d.message}${d.suggestion ? `, suggestion: ${d.suggestion}` : ""}`)
+        .join("\n");
+      return { ok: false, message: audioMessage, outPath };
+    }
+
     try {
-      await deps.runRenderPipeline!(result.spec, {
+      await deps.runRenderPipeline!(resolved.spec, {
         profileName: "final",
         outputPath: outPath.replace(/\.json$/, ".mp4"),
       });
@@ -161,6 +182,7 @@ export async function runGenerateFromCli(argv: string[]): Promise<void> {
     config,
     writeFile: (path, content) => writeFileSync(path, content, "utf-8"),
     runRenderPipeline,
+    resolveSceneAudioPaths,
   };
 
   const result = await runGenerate(args, deps);

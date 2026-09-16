@@ -9,6 +9,7 @@ import type { CatalogueEntry } from "@claudevid/motion";
 import type { GenerateResult } from "@claudevid/claude";
 
 import type { runRenderPipeline as RunRenderPipeline } from "../src/render-pipeline.js";
+import type { resolveSceneAudioPaths as ResolveSceneAudioPaths } from "../src/scene-audio-paths.js";
 
 import {
   parseGenerateArgs,
@@ -43,6 +44,7 @@ function baseDeps(overrides: Partial<GenerateDeps> = {}): GenerateDeps {
     bundledThemes: ["github-dark"],
     config: {},
     writeFile: vi.fn(),
+    resolveSceneAudioPaths: vi.fn<typeof ResolveSceneAudioPaths>((spec) => ({ ok: true, spec })),
     ...overrides,
   };
 }
@@ -85,6 +87,16 @@ describe("parseGenerateArgs (FR5)", () => {
   it("rejects a non-positive-integer --repair-attempts", () => {
     expect(() => parseGenerateArgs(["p", "--repair-attempts", "0"])).toThrow(ArgError);
     expect(() => parseGenerateArgs(["p", "--repair-attempts", "abc"])).toThrow(ArgError);
+  });
+
+  it("parses --audio-root (FR8)", () => {
+    const args = parseGenerateArgs(["Explain closures", "--audio-root", "/audio"]);
+    expect(args.audioRoot).toBe("/audio");
+  });
+
+  it("leaves audioRoot undefined when --audio-root is absent", () => {
+    const args = parseGenerateArgs(["Explain closures"]);
+    expect(args.audioRoot).toBeUndefined();
   });
 });
 
@@ -180,7 +192,7 @@ describe("runGenerate (FR5)", () => {
   });
 
   it("calls runRenderPipeline after a successful generate when args.render is true", async () => {
-    const runRenderPipeline = vi.fn<typeof RunRenderPipeline>(async () => {});
+    const runRenderPipeline = vi.fn<typeof RunRenderPipeline>(async () => ({ skippedCaptionSceneIds: [] }));
     const deps = baseDeps({ runRenderPipeline });
 
     const result = await runGenerate({ prompt: "Explain hooks", render: true }, deps);
@@ -192,7 +204,7 @@ describe("runGenerate (FR5)", () => {
   });
 
   it("does not call runRenderPipeline when args.render is false", async () => {
-    const runRenderPipeline = vi.fn<typeof RunRenderPipeline>(async () => {});
+    const runRenderPipeline = vi.fn<typeof RunRenderPipeline>(async () => ({ skippedCaptionSceneIds: [] }));
     const deps = baseDeps({ runRenderPipeline });
 
     await runGenerate({ prompt: "Explain hooks", render: false }, deps);
@@ -210,5 +222,47 @@ describe("runGenerate (FR5)", () => {
 
     expect(result.ok).toBe(true);
     expect(result.message).toContain("ffmpeg exploded");
+  });
+
+  it("resolves scene.audio.src against the written spec's directory before rendering (FR6/FR7)", async () => {
+    const runRenderPipeline = vi.fn<typeof RunRenderPipeline>(async () => ({ skippedCaptionSceneIds: [] }));
+    const resolveSceneAudioPaths = vi.fn<typeof ResolveSceneAudioPaths>((spec) => ({ ok: true, spec }));
+    const deps = baseDeps({ runRenderPipeline, resolveSceneAudioPaths });
+
+    await runGenerate({ prompt: "Explain hooks", outPath: "out/dir/spec.json", render: true }, deps);
+
+    expect(resolveSceneAudioPaths).toHaveBeenCalledTimes(1);
+    expect(resolveSceneAudioPaths.mock.calls[0]![0]).toEqual(FAKE_SPEC);
+    expect(resolveSceneAudioPaths.mock.calls[0]![1]).toMatchObject({
+      specDir: expect.stringContaining("out/dir"),
+      audioRoot: undefined,
+    });
+    // The resolved spec (not the raw generated one) is what gets rendered.
+    expect(runRenderPipeline.mock.calls[0]![0]).toEqual(FAKE_SPEC);
+  });
+
+  it("fails the command (without rendering) when scene-audio resolution reports diagnostics", async () => {
+    const runRenderPipeline = vi.fn<typeof RunRenderPipeline>(async () => ({ skippedCaptionSceneIds: [] }));
+    const resolveSceneAudioPaths = vi.fn<typeof ResolveSceneAudioPaths>(() => ({
+      ok: false,
+      diagnostics: [{ path: "/scenes/0/audio/src", message: 'audio file not found: "missing.wav"' }],
+    }));
+    const deps = baseDeps({ runRenderPipeline, resolveSceneAudioPaths });
+
+    const result = await runGenerate({ prompt: "Explain hooks", render: true }, deps);
+
+    expect(result.ok).toBe(false);
+    expect(result.message).toContain("/scenes/0/audio/src");
+    expect(result.message).toContain("not found");
+    expect(runRenderPipeline).not.toHaveBeenCalled();
+  });
+
+  it("does not resolve scene-audio paths when args.render is false", async () => {
+    const resolveSceneAudioPaths = vi.fn<typeof ResolveSceneAudioPaths>((spec) => ({ ok: true, spec }));
+    const deps = baseDeps({ resolveSceneAudioPaths });
+
+    await runGenerate({ prompt: "Explain hooks", render: false }, deps);
+
+    expect(resolveSceneAudioPaths).not.toHaveBeenCalled();
   });
 });

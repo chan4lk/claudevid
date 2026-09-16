@@ -17,12 +17,16 @@ import { BUNDLED_LANGS, BUNDLED_THEMES } from "@claudevid/layer-code";
 import { ArgError, findFlagValue, hasFlag } from "../args.js";
 import { loadConfig } from "../config.js";
 import { runRenderPipeline } from "../render-pipeline.js";
+import { resolveSceneAudioPaths } from "../scene-audio-paths.js";
 import { runGenerate, type GenerateDeps } from "./generate.js";
 
 export interface BatchCommandArgs {
   dir: string;
   concurrency: number;
   render: boolean;
+  /** spec.md FR8 — extra allowed root for `scene.audio.src` resolution, in addition to each
+   * job's own directory. */
+  audioRoot?: string;
 }
 
 /** Pure argument parsing — no filesystem access. `argv[0]` is the job directory. */
@@ -39,8 +43,9 @@ export function parseBatchArgs(argv: string[]): BatchCommandArgs {
   }
 
   const render = hasFlag(argv, "--render");
+  const audioRoot = findFlagValue(argv, "--audio-root");
 
-  return { dir, concurrency, render };
+  return { dir, concurrency, render, audioRoot };
 }
 
 export interface BatchJobResult {
@@ -160,7 +165,10 @@ async function realRunJob(
   const job = classifyJob(content);
 
   if (job.kind === "prompt") {
-    const result = await runGenerate({ prompt: job.prompt, outPath: job.out, render: args.render }, generateDeps);
+    const result = await runGenerate(
+      { prompt: job.prompt, outPath: job.out, render: args.render, audioRoot: args.audioRoot },
+      generateDeps,
+    );
     if (!result.ok) {
       throw new Error(result.message);
     }
@@ -171,8 +179,20 @@ async function realRunJob(
     if (!args.render) {
       return {};
     }
+
+    // spec.md FR6/FR7: resolve `scene.audio.src` against this job file's own directory before
+    // rendering it.
+    const specDir = path.dirname(path.resolve(file));
+    const resolved = resolveSceneAudioPaths(job.spec, { specDir, audioRoot: args.audioRoot });
+    if (!resolved.ok) {
+      const message = resolved.diagnostics
+        .map((d) => `${d.path}: ${d.message}${d.suggestion ? `, suggestion: ${d.suggestion}` : ""}`)
+        .join("\n");
+      throw new Error(message);
+    }
+
     const outputPath = file.replace(/\.json$/, ".mp4");
-    await runRenderPipeline(job.spec, { profileName: "final", outputPath });
+    await runRenderPipeline(resolved.spec, { profileName: "final", outputPath });
     return { outputPath };
   }
 
@@ -200,6 +220,7 @@ export async function runBatchFromCli(argv: string[]): Promise<void> {
     config,
     writeFile: (path, fileContent) => writeFileSync(path, fileContent, "utf-8"),
     runRenderPipeline,
+    resolveSceneAudioPaths,
   };
 
   const deps: BatchDeps = {

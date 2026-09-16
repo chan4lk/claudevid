@@ -3,26 +3,40 @@
 // `--out` file unless `--force` (mirrors tools/motion-preview's `assertOutputWritable` pattern),
 // then runs the shared render pipeline (FR9) at the spec's native resolution.
 
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, resolve as resolvePath } from "node:path";
 
 import { parseSpec } from "@claudevid/core";
 
 import { ArgError, findFlagValue, hasFlag } from "../args.js";
 import { runRenderPipeline } from "../render-pipeline.js";
+import { resolveSceneAudioPaths } from "../scene-audio-paths.js";
 
 export interface RenderCommandArgs {
   specPath: string;
   outPath: string;
   force: boolean;
   captions: boolean;
+  /** spec.md FR18/AC15: render anyway when `captions` is set and some scenes use `scene.audio`;
+   * those scenes are skipped rather than captioned. Rejected by `parseRenderArgs` (ArgError) when
+   * `captions` is not also set. */
+  captionsAllowPartial: boolean;
   cpuEncode: boolean;
   profile?: string;
+  /** spec.md FR8 — extra allowed root for `scene.audio.src` resolution, in addition to the spec
+   * file's own directory. */
+  audioRoot?: string;
 }
 
 export interface RenderDeps {
   readFile: (path: string) => string;
   exists: (path: string) => boolean;
   runRenderPipeline: typeof runRenderPipeline;
+  /** spec.md FR6/FR7 — defaults to the real `resolveSceneAudioPaths` when omitted. */
+  resolveSceneAudioPaths?: typeof resolveSceneAudioPaths;
+  /** spec.md FR18 — writes the `<out>.captions-skipped.json` sidecar. Defaults to the real
+   * `fs.writeFileSync` when omitted. */
+  writeFile?: (path: string, content: string) => void;
 }
 
 export interface RenderResult {
@@ -47,8 +61,14 @@ export function parseRenderArgs(argv: string[]): RenderCommandArgs {
   const force = hasFlag(argv, "--force");
   const captions = hasFlag(argv, "--captions");
   const cpuEncode = hasFlag(argv, "--cpu-encode");
+  const captionsAllowPartial = hasFlag(argv, "--captions-allow-partial");
+  const audioRoot = findFlagValue(argv, "--audio-root");
 
-  return { specPath, outPath, force, captions, cpuEncode };
+  if (captionsAllowPartial && !captions) {
+    throw new ArgError("--captions-allow-partial requires --captions");
+  }
+
+  return { specPath, outPath, force, captions, cpuEncode, captionsAllowPartial, audioRoot };
 }
 
 /**
@@ -75,15 +95,31 @@ export async function runRender(args: RenderCommandArgs, deps: RenderDeps): Prom
     return { ok: false, message };
   }
 
+  // spec.md FR6/FR7: resolve every scene's `audio.src` against the spec file's own directory
+  // (or `--audio-root`) immediately after a successful parseSpec, before anything else touches
+  // the spec. Diagnostics are printed in the same shape as parseSpec's own.
+  const resolveAudioPaths = deps.resolveSceneAudioPaths ?? resolveSceneAudioPaths;
+  const specDir = dirname(resolvePath(args.specPath));
+  const resolved = resolveAudioPaths(result.spec, { specDir, audioRoot: args.audioRoot });
+  if (!resolved.ok) {
+    const message = resolved.diagnostics
+      .map((d) => `${d.path}: ${d.message}${d.suggestion ? `, suggestion: ${d.suggestion}` : ""}`)
+      .join("\n");
+    return { ok: false, message };
+  }
+  const spec = resolved.spec;
+
   if (!args.force && deps.exists(args.outPath)) {
     return { ok: false, message: `refusing to overwrite existing file "${args.outPath}" without --force` };
   }
 
+  let pipelineResult: { skippedCaptionSceneIds: string[] };
   try {
-    await deps.runRenderPipeline(result.spec, {
+    pipelineResult = await deps.runRenderPipeline(spec, {
       profileName: "final",
       outputPath: args.outPath,
       captions: args.captions,
+      captionsAllowPartial: args.captionsAllowPartial,
       cpuEncode: args.cpuEncode,
       force: args.force,
     });
@@ -92,7 +128,17 @@ export async function runRender(args: RenderCommandArgs, deps: RenderDeps): Prom
     return { ok: false, message: reason };
   }
 
-  return { ok: true, message: `wrote ${args.outPath}` };
+  // spec.md FR18: a partial-captions render (via --captions-allow-partial) writes a sidecar
+  // naming the scenes that were rendered without captions, only when there were any.
+  const skipped = pipelineResult.skippedCaptionSceneIds;
+  if (skipped.length > 0) {
+    const writeFile = deps.writeFile ?? ((path, content) => writeFileSync(path, content, "utf-8"));
+    writeFile(`${args.outPath}.captions-skipped.json`, JSON.stringify({ skipped }, null, 2));
+  }
+
+  const skipSuffix =
+    skipped.length > 0 ? ` (${skipped.length} scene${skipped.length === 1 ? "" : "s"} skipped captions)` : "";
+  return { ok: true, message: `wrote ${args.outPath}${skipSuffix}` };
 }
 
 /**
@@ -106,6 +152,8 @@ export async function runRenderFromCli(argv: string[]): Promise<void> {
     readFile: (path) => readFileSync(path, "utf-8"),
     exists: (path) => existsSync(path),
     runRenderPipeline,
+    resolveSceneAudioPaths,
+    writeFile: (path, content) => writeFileSync(path, content, "utf-8"),
   };
 
   const result = await runRender(args, deps);
