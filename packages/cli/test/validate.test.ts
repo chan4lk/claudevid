@@ -1,9 +1,10 @@
 // `claudevid validate` tests (spec.md FR2/AC2). No filesystem access — `readFile` is an injected
 // fake, following tools/motion-preview's dependency-injection test style (see test/config.test.ts).
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { runValidate } from "../src/commands/validate.js";
+import type { resolveSceneAudioPaths as ResolveSceneAudioPaths } from "../src/scene-audio-paths.js";
 
 const VALID_SPEC = JSON.stringify({
   version: 1,
@@ -120,5 +121,37 @@ describe("runValidate (FR2/AC2)", () => {
     expect(result.sceneCount).toBe(0);
     expect(result.message).toContain("/:");
     expect(result.message).toContain("invalid JSON");
+  });
+
+  it("reports the FR6 diagnostics for a bad scene.audio.src and exits non-zero (AC7)", () => {
+    const resolveSceneAudioPaths = vi.fn<typeof ResolveSceneAudioPaths>(() => ({
+      ok: false,
+      diagnostics: [{ path: "/scenes/0/audio/src", message: 'audio file not found: "missing.wav"' }],
+    }));
+
+    const result = runValidate("spec.json", { readFile: () => VALID_SPEC, resolveSceneAudioPaths });
+
+    expect(result.ok).toBe(false);
+    expect(result.sceneCount).toBe(0);
+    expect(result.message).toContain("/scenes/0/audio/src");
+    expect(result.message).toContain("not found");
+  });
+
+  it("is unaffected by resolveSceneAudioPaths for a spec without audio (AC7)", () => {
+    const resolveSceneAudioPaths = vi.fn<typeof ResolveSceneAudioPaths>((spec) => ({ ok: true, spec }));
+
+    const result = runValidate("spec.json", { readFile: () => VALID_SPEC, resolveSceneAudioPaths });
+
+    expect(result.ok).toBe(true);
+    expect(result.sceneCount).toBe(2);
+    expect(resolveSceneAudioPaths).toHaveBeenCalledTimes(1);
+  });
+
+  it("passes --audio-root through to resolveSceneAudioPaths (FR8)", () => {
+    const resolveSceneAudioPaths = vi.fn<typeof ResolveSceneAudioPaths>((spec) => ({ ok: true, spec }));
+
+    runValidate("spec.json", { readFile: () => VALID_SPEC, resolveSceneAudioPaths }, { audioRoot: "/audio" });
+
+    expect(resolveSceneAudioPaths.mock.calls[0]![1]).toMatchObject({ audioRoot: "/audio" });
   });
 });

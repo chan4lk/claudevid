@@ -82,3 +82,34 @@ audio has been synthesized and forced-aligned — the render pipeline inserts th
 itself (opt-in via `--captions`) once those timings are available. Authoring one directly will
 fail schema validation (it requires a non-empty `words` array) or, if faked, produce fake timing
 data.
+
+## External audio per scene
+
+A scene can carry a pre-recorded voice file instead of Kokoro narration — for a cloned or human
+presenter voice — and still drive `duration: "auto"`:
+
+```json
+{ "id": "slide-03", "duration": "auto",
+  "audio": { "src": "audio/slide-03.wav", "padStart": 0.4, "padEnd": 0.6 },
+  "layers": [ ... ] }
+```
+
+- **`narration` xor `audio`.** A scene has one voice source; both together fail validation.
+- **`src` is a plain file path**, relative to the spec file's directory (absolute paths are also
+  accepted). URL schemes (`http://`, `pipe:`, `concat:`, `data:`, `file:`) are rejected by the
+  schema. The file must exist, be a regular file, and sit under the spec's directory — or under
+  the directory passed with `--audio-root <dir>` (accepted by `validate`, `render`, `preview`,
+  `batch`, `generate`). Anything else is a validation diagnostic before any render starts.
+- **Pads are silence.** `padStart` / `padEnd` (seconds, default 0) reserve quiet air before and
+  after the audio inside the scene's window and count toward `duration: "auto"`. A cross-fade
+  longer than the previous scene's `padEnd` prints an advisory warning: the next voice would
+  start over this scene's speech.
+- **Decoding is strict.** Any container ffmpeg reads (WAV, MP3, FLAC, …) is normalised to the
+  voice track's sample rate, mono. An empty or truncated stream, a decode longer than 10 minutes,
+  a stall past 2 minutes, or a length that disagrees with `ffprobe` fails the render rather than
+  producing a silent scene.
+- **Captions fail closed.** `--captions` refuses to run when any scene uses `audio` (there is no
+  text to align). Pass `--captions-allow-partial` to caption only the narrated scenes; the render
+  then writes `<out>.captions-skipped.json` beside the MP4 listing the scenes without captions.
+- The old top-level `audio.track` field no longer exists; a spec that still carries it fails
+  validation.

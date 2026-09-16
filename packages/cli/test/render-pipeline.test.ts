@@ -2,7 +2,9 @@
 // (synthesis, alignment, ffmpeg probing/encoding/muxing, canvas rendering) is injected — no real
 // ffmpeg binary, no real ONNX model, no real canvas rendering (spec.md NFR3).
 
-import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+
+import { describe, expect, it, vi } from "vitest";
 import type { EncoderCapabilities } from "@claudevid/encoder-ffmpeg";
 import type { AudioGraphOptions, AlignRequest, AlignResult, SynthesisRequest } from "@claudevid/audio";
 import { parseSpec } from "@claudevid/core";
@@ -12,7 +14,11 @@ import type { VideoSpec, Timeline } from "@claudevid/core";
 // D1) — exercised here because AC4 asserts the pipeline actually constructs one.
 import "@claudevid/layer-captions";
 
-import { runRenderPipeline, type RenderPipelineOptions } from "../src/render-pipeline.js";
+import {
+  runRenderPipeline,
+  CaptionsExternalAudioError,
+  type RenderPipelineOptions,
+} from "../src/render-pipeline.js";
 
 const FPS = 30;
 const SAMPLE_RATE = 24000;
@@ -238,5 +244,237 @@ describe("runRenderPipeline (FR9)", () => {
     // The regression this guards against: computing duration from only the first sub-block (or
     // any truncated prefix) instead of summing every sub-block chunkNarrationText produced.
     expect(Math.abs(graphCalls[0]!.outputDurationSeconds - firstBlockOnlyDurationSeconds)).toBeGreaterThan(1 / FPS);
+  });
+});
+
+describe("runRenderPipeline (FR13-FR17: scene.audio)", () => {
+  it("AC10: an `audio` scene's pads widen the auto-duration window and stay silent in the assembled voice track", async () => {
+    const decodedSeconds = 2;
+    // Non-zero fill so the decoded block's bytes are distinguishable from the zero-filled pads.
+    const decodedAudio = Buffer.alloc(Math.round(decodedSeconds * SAMPLE_RATE) * 2, 0x7f);
+
+    const spec: VideoSpec = {
+      version: 1,
+      width: 100,
+      height: 100,
+      fps: FPS,
+      scenes: [
+        {
+          id: "scene-audio",
+          duration: "auto",
+          layers: [],
+          audio: { src: "/tmp/does-not-matter/a.wav", padStart: 0.5, padEnd: 1 },
+        },
+      ],
+    };
+
+    const { opts, renderFrameCalls } = buildFakes();
+    opts.decodeAudioFn = async () => ({ audio: decodedAudio, sampleRate: SAMPLE_RATE, durationSeconds: decodedSeconds });
+
+    let voiceTrackBytes: Buffer | undefined;
+    opts.buildAudioGraphArgvFn = (graphOpts) => {
+      voiceTrackBytes = readFileSync(graphOpts.tracks[0]!.filePath);
+      return ["-dummy-argv"];
+    };
+
+    await runRenderPipeline(spec, opts);
+
+    // padStart 0.5s + decoded 2s + padEnd 1s = 3.5s -> 105 frames at 30fps.
+    const timeline = renderFrameCalls[0]!.timeline;
+    expect(timeline.frameCount).toBe(105);
+
+    expect(voiceTrackBytes).toBeDefined();
+    const pcm = voiceTrackBytes!.subarray(44); // skip the 44-byte canonical WAV header
+    const bytesPerSecond = SAMPLE_RATE * 2;
+    const padStartBytes = Math.round(0.5 * bytesPerSecond);
+    const padEndBytes = Math.round(1 * bytesPerSecond);
+
+    expect(pcm.subarray(0, padStartBytes).every((byte) => byte === 0)).toBe(true);
+    expect(pcm.subarray(pcm.length - padEndBytes).every((byte) => byte === 0)).toBe(true);
+    // The decoded block's own bytes start at exactly startFrame/fps + padStart (startFrame is 0
+    // for this spec's only scene).
+    expect(pcm.subarray(padStartBytes, padStartBytes + 4).every((byte) => byte === 0x7f)).toBe(true);
+  });
+
+  it("AC11: a spec mixing a narrated scene and an `audio` scene renders one voice track spanning both computed durations", async () => {
+    const decodedSeconds = 2;
+    const decodedAudio = Buffer.alloc(Math.round(decodedSeconds * SAMPLE_RATE) * 2);
+
+    const spec: VideoSpec = {
+      version: 1,
+      width: 100,
+      height: 100,
+      fps: FPS,
+      scenes: [
+        { id: "scene-narrated", duration: "auto", layers: [], narration: [{ text: "Hello" }] },
+        { id: "scene-audio", duration: "auto", layers: [], audio: { src: "/tmp/does-not-matter/a.wav" } },
+      ],
+    };
+
+    const { opts, graphCalls, muxCalls } = buildFakes();
+    opts.decodeAudioFn = async () => ({ audio: decodedAudio, sampleRate: SAMPLE_RATE, durationSeconds: decodedSeconds });
+
+    await runRenderPipeline(spec, opts);
+
+    expect(graphCalls).toHaveLength(1);
+    expect(graphCalls[0]!.tracks).toHaveLength(1);
+    expect(graphCalls[0]!.tracks[0]!.role).toBe("voice");
+    expect(graphCalls[0]!.outputDurationSeconds).toBeCloseTo(BLOCK_DURATION_SECONDS + decodedSeconds, 5);
+    expect(muxCalls).toHaveLength(1);
+  });
+
+  it("AC12: a decoded block at the wrong sample rate throws (naming the scene and both rates) before any frame is rendered", async () => {
+    const spec: VideoSpec = {
+      version: 1,
+      width: 100,
+      height: 100,
+      fps: FPS,
+      scenes: [{ id: "scene-audio", duration: "auto", layers: [], audio: { src: "/tmp/does-not-matter/a.wav" } }],
+    };
+
+    const { opts, renderFrameCalls } = buildFakes();
+    opts.decodeAudioFn = async () => ({ audio: Buffer.alloc(100), sampleRate: 44100, durationSeconds: 1 });
+
+    let thrown: unknown;
+    try {
+      await runRenderPipeline(spec, opts);
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeInstanceOf(Error);
+    const message = (thrown as Error).message;
+    expect(message).toContain("scene-audio");
+    expect(message).toContain("44100");
+    expect(message).toContain(String(SAMPLE_RATE));
+    expect(renderFrameCalls).toHaveLength(0);
+  });
+
+  it("AC13: --captions with an `audio` scene and no allow-partial throws before synthesizeFn/decodeAudioFn run", async () => {
+    const spec: VideoSpec = {
+      version: 1,
+      width: 100,
+      height: 100,
+      fps: FPS,
+      scenes: [
+        { id: "scene-narrated", duration: "auto", layers: [], narration: [{ text: "Hello" }] },
+        { id: "scene-audio", duration: "auto", layers: [], audio: { src: "/tmp/does-not-matter/a.wav" } },
+      ],
+    };
+
+    let synthesizeCalled = false;
+    let decodeCalled = false;
+    const { opts } = buildFakes(async (request) => {
+      synthesizeCalled = true;
+      return fakeSynthesize(request);
+    });
+    opts.decodeAudioFn = async () => {
+      decodeCalled = true;
+      return { audio: Buffer.alloc(0), sampleRate: SAMPLE_RATE, durationSeconds: 1 };
+    };
+    opts.captions = true;
+
+    let thrown: unknown;
+    try {
+      await runRenderPipeline(spec, opts);
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeInstanceOf(CaptionsExternalAudioError);
+    expect((thrown as CaptionsExternalAudioError).sceneIds).toEqual(["scene-audio"]);
+    expect(synthesizeCalled).toBe(false);
+    expect(decodeCalled).toBe(false);
+  });
+
+  it("AC13: --captions-allow-partial captions the narrated scene and skips the `audio` scene, reporting it in skippedCaptionSceneIds", async () => {
+    const decodedSeconds = 1;
+    const decodedAudio = Buffer.alloc(Math.round(decodedSeconds * SAMPLE_RATE) * 2);
+
+    const spec: VideoSpec = {
+      version: 1,
+      width: 100,
+      height: 100,
+      fps: FPS,
+      scenes: [
+        { id: "scene-narrated", duration: "auto", layers: [], narration: [{ text: "Hello" }] },
+        { id: "scene-audio", duration: "auto", layers: [], audio: { src: "/tmp/does-not-matter/a.wav" } },
+      ],
+    };
+
+    const { opts, renderFrameCalls } = buildFakes();
+    opts.decodeAudioFn = async () => ({ audio: decodedAudio, sampleRate: SAMPLE_RATE, durationSeconds: decodedSeconds });
+    opts.captions = true;
+    opts.captionsAllowPartial = true;
+
+    const result = await runRenderPipeline(spec, opts);
+
+    expect(result.skippedCaptionSceneIds).toEqual(["scene-audio"]);
+
+    const timeline = renderFrameCalls[0]!.timeline;
+    const captionsLayers = timeline.layers.filter((l) => l.type === "captions");
+    expect(captionsLayers).toHaveLength(1);
+    expect(captionsLayers[0]!.sceneId).toBe("scene-narrated");
+  });
+
+  it("AC14(a): a cross-fade longer than the previous `audio` scene's padEnd emits one advisory warning; a padEnd covering it emits none", async () => {
+    const decodedAudio = Buffer.alloc(Math.round(1 * SAMPLE_RATE) * 2);
+    const buildCrossFadeSpec = (padEnd: number): VideoSpec => ({
+      version: 1,
+      width: 100,
+      height: 100,
+      fps: FPS,
+      scenes: [
+        { id: "scene-audio", duration: "auto", layers: [], audio: { src: "/tmp/does-not-matter/a.wav", padEnd } },
+        {
+          id: "scene-next",
+          duration: 1,
+          layers: [],
+          transition: { kind: "cross-fade", duration: 0.5 },
+        },
+      ],
+    });
+
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const { opts: shortPadOpts } = buildFakes();
+    shortPadOpts.decodeAudioFn = async () => ({ audio: decodedAudio, sampleRate: SAMPLE_RATE, durationSeconds: 1 });
+    await runRenderPipeline(buildCrossFadeSpec(0.2), shortPadOpts);
+    const shortPadWarnings = warnSpy.mock.calls.filter(
+      ([line]) => typeof line === "string" && line.startsWith("audio:"),
+    );
+    expect(shortPadWarnings).toHaveLength(1);
+
+    warnSpy.mockClear();
+
+    const { opts: longPadOpts } = buildFakes();
+    longPadOpts.decodeAudioFn = async () => ({ audio: decodedAudio, sampleRate: SAMPLE_RATE, durationSeconds: 1 });
+    await runRenderPipeline(buildCrossFadeSpec(0.6), longPadOpts);
+    const longPadWarnings = warnSpy.mock.calls.filter(
+      ([line]) => typeof line === "string" && line.startsWith("audio:"),
+    );
+    expect(longPadWarnings).toHaveLength(0);
+
+    warnSpy.mockRestore();
+  });
+
+  it("AC14(b): an `audio` scene with a fixed duration shorter than its audio emits one truncation warning", async () => {
+    const decodedAudio = Buffer.alloc(Math.round(2 * SAMPLE_RATE) * 2);
+    const spec: VideoSpec = {
+      version: 1,
+      width: 100,
+      height: 100,
+      fps: FPS,
+      scenes: [{ id: "scene-audio", duration: 1, layers: [], audio: { src: "/tmp/does-not-matter/a.wav" } }],
+    };
+
+    const { opts } = buildFakes();
+    opts.decodeAudioFn = async () => ({ audio: decodedAudio, sampleRate: SAMPLE_RATE, durationSeconds: 2 });
+
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    await runRenderPipeline(spec, opts);
+    const audioWarnings = warnSpy.mock.calls.filter(([line]) => typeof line === "string" && line.startsWith("audio:"));
+    expect(audioWarnings).toHaveLength(1);
+    warnSpy.mockRestore();
   });
 });

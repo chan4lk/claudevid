@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { ArgError } from "../src/args.js";
 import { parseRenderArgs, runRender, type RenderDeps } from "../src/commands/render.js";
+import type { resolveSceneAudioPaths as ResolveSceneAudioPaths } from "../src/scene-audio-paths.js";
 
 const VALID_SPEC = JSON.stringify({
   version: 1,
@@ -47,6 +48,8 @@ describe("parseRenderArgs (FR4)", () => {
       force: false,
       captions: false,
       cpuEncode: false,
+      captionsAllowPartial: false,
+      audioRoot: undefined,
     });
   });
 
@@ -56,6 +59,27 @@ describe("parseRenderArgs (FR4)", () => {
     expect(args.force).toBe(true);
     expect(args.captions).toBe(true);
     expect(args.cpuEncode).toBe(true);
+  });
+
+  it("parses --captions-allow-partial and --audio-root (AC15)", () => {
+    const args = parseRenderArgs([
+      "spec.json",
+      "--out",
+      "out.mp4",
+      "--captions",
+      "--captions-allow-partial",
+      "--audio-root",
+      "/audio",
+    ]);
+
+    expect(args.captionsAllowPartial).toBe(true);
+    expect(args.audioRoot).toBe("/audio");
+  });
+
+  it("throws ArgError when --captions-allow-partial is given without --captions (AC15)", () => {
+    expect(() =>
+      parseRenderArgs(["spec.json", "--out", "out.mp4", "--captions-allow-partial"]),
+    ).toThrow(ArgError);
   });
 });
 
@@ -69,7 +93,14 @@ describe("runRender (FR4/Edge Cases)", () => {
     };
 
     const result = await runRender(
-      { specPath: "spec.json", outPath: "out.mp4", force: false, captions: false, cpuEncode: false },
+      {
+        specPath: "spec.json",
+        outPath: "out.mp4",
+        force: false,
+        captions: false,
+        cpuEncode: false,
+        captionsAllowPartial: false,
+      },
       deps,
     );
 
@@ -80,7 +111,7 @@ describe("runRender (FR4/Edge Cases)", () => {
   });
 
   it("proceeds past the no-clobber guard when --force is set", async () => {
-    const runRenderPipeline = vi.fn().mockResolvedValue(undefined);
+    const runRenderPipeline = vi.fn().mockResolvedValue({ skippedCaptionSceneIds: [] });
     const deps: RenderDeps = {
       readFile: () => VALID_SPEC,
       exists: () => true,
@@ -88,7 +119,14 @@ describe("runRender (FR4/Edge Cases)", () => {
     };
 
     const result = await runRender(
-      { specPath: "spec.json", outPath: "out.mp4", force: true, captions: false, cpuEncode: false },
+      {
+        specPath: "spec.json",
+        outPath: "out.mp4",
+        force: true,
+        captions: false,
+        cpuEncode: false,
+        captionsAllowPartial: false,
+      },
       deps,
     );
 
@@ -97,7 +135,7 @@ describe("runRender (FR4/Edge Cases)", () => {
   });
 
   it("runs the pipeline and reports success for a valid spec with no existing output", async () => {
-    const runRenderPipeline = vi.fn().mockResolvedValue(undefined);
+    const runRenderPipeline = vi.fn().mockResolvedValue({ skippedCaptionSceneIds: [] });
     const deps: RenderDeps = {
       readFile: () => VALID_SPEC,
       exists: () => false,
@@ -105,7 +143,14 @@ describe("runRender (FR4/Edge Cases)", () => {
     };
 
     const result = await runRender(
-      { specPath: "spec.json", outPath: "out.mp4", force: false, captions: true, cpuEncode: false },
+      {
+        specPath: "spec.json",
+        outPath: "out.mp4",
+        force: false,
+        captions: true,
+        cpuEncode: false,
+        captionsAllowPartial: false,
+      },
       deps,
     );
 
@@ -118,6 +163,7 @@ describe("runRender (FR4/Edge Cases)", () => {
         profileName: "final",
         outputPath: "out.mp4",
         captions: true,
+        captionsAllowPartial: false,
         cpuEncode: false,
         force: false,
       }),
@@ -133,7 +179,14 @@ describe("runRender (FR4/Edge Cases)", () => {
     };
 
     const result = await runRender(
-      { specPath: "spec.json", outPath: "out.mp4", force: false, captions: false, cpuEncode: false },
+      {
+        specPath: "spec.json",
+        outPath: "out.mp4",
+        force: false,
+        captions: false,
+        cpuEncode: false,
+        captionsAllowPartial: false,
+      },
       deps,
     );
 
@@ -151,12 +204,135 @@ describe("runRender (FR4/Edge Cases)", () => {
     };
 
     const result = await runRender(
-      { specPath: "spec.json", outPath: "out.mp4", force: false, captions: false, cpuEncode: false },
+      {
+        specPath: "spec.json",
+        outPath: "out.mp4",
+        force: false,
+        captions: false,
+        cpuEncode: false,
+        captionsAllowPartial: false,
+      },
       deps,
     );
 
     expect(result.ok).toBe(false);
     expect(result.message).toContain("invalid JSON");
     expect(runRenderPipeline).not.toHaveBeenCalled();
+  });
+
+  it("reports the FR6 diagnostics for a bad scene.audio.src and never calls the pipeline (AC7)", async () => {
+    const runRenderPipeline = vi.fn();
+    const resolveSceneAudioPaths = vi.fn<typeof ResolveSceneAudioPaths>(() => ({
+      ok: false,
+      diagnostics: [{ path: "/scenes/0/audio/src", message: 'audio file not found: "missing.wav"' }],
+    }));
+    const deps: RenderDeps = {
+      readFile: () => VALID_SPEC,
+      exists: () => false,
+      runRenderPipeline,
+      resolveSceneAudioPaths,
+    };
+
+    const result = await runRender(
+      {
+        specPath: "spec.json",
+        outPath: "out.mp4",
+        force: false,
+        captions: false,
+        cpuEncode: false,
+        captionsAllowPartial: false,
+      },
+      deps,
+    );
+
+    expect(result.ok).toBe(false);
+    expect(result.message).toContain("/scenes/0/audio/src");
+    expect(result.message).toContain("not found");
+    expect(runRenderPipeline).not.toHaveBeenCalled();
+  });
+
+  it("is unaffected by resolveSceneAudioPaths for a spec without audio (AC7)", async () => {
+    const runRenderPipeline = vi.fn().mockResolvedValue({ skippedCaptionSceneIds: [] });
+    const resolveSceneAudioPaths = vi.fn<typeof ResolveSceneAudioPaths>((spec) => ({ ok: true, spec }));
+    const deps: RenderDeps = {
+      readFile: () => VALID_SPEC,
+      exists: () => false,
+      runRenderPipeline,
+      resolveSceneAudioPaths,
+    };
+
+    const result = await runRender(
+      {
+        specPath: "spec.json",
+        outPath: "out.mp4",
+        force: false,
+        captions: false,
+        cpuEncode: false,
+        captionsAllowPartial: false,
+      },
+      deps,
+    );
+
+    expect(result.ok).toBe(true);
+    expect(resolveSceneAudioPaths).toHaveBeenCalledTimes(1);
+    expect(runRenderPipeline).toHaveBeenCalledTimes(1);
+  });
+
+  it("writes <out>.captions-skipped.json via the injected writeFile when the pipeline reports skips (AC15)", async () => {
+    const runRenderPipeline = vi.fn().mockResolvedValue({ skippedCaptionSceneIds: ["scene-2"] });
+    const writeFile = vi.fn();
+    const deps: RenderDeps = {
+      readFile: () => VALID_SPEC,
+      exists: () => false,
+      runRenderPipeline,
+      writeFile,
+    };
+
+    const result = await runRender(
+      {
+        specPath: "spec.json",
+        outPath: "out.mp4",
+        force: false,
+        captions: true,
+        cpuEncode: false,
+        captionsAllowPartial: true,
+      },
+      deps,
+    );
+
+    expect(result.ok).toBe(true);
+    expect(writeFile).toHaveBeenCalledTimes(1);
+    const [sidecarPath, sidecarContent] = writeFile.mock.calls[0]!;
+    expect(sidecarPath).toBe("out.mp4.captions-skipped.json");
+    expect(JSON.parse(sidecarContent as string)).toEqual({ skipped: ["scene-2"] });
+    expect(runRenderPipeline).toHaveBeenCalledWith(
+      expect.objectContaining({ version: 1 }),
+      expect.objectContaining({ captionsAllowPartial: true }),
+    );
+  });
+
+  it("does not write the sidecar when the pipeline reports no skips (AC15)", async () => {
+    const runRenderPipeline = vi.fn().mockResolvedValue({ skippedCaptionSceneIds: [] });
+    const writeFile = vi.fn();
+    const deps: RenderDeps = {
+      readFile: () => VALID_SPEC,
+      exists: () => false,
+      runRenderPipeline,
+      writeFile,
+    };
+
+    await runRender(
+      {
+        specPath: "spec.json",
+        outPath: "out.mp4",
+        force: false,
+        captions: false,
+        cpuEncode: false,
+        captionsAllowPartial: false,
+      },
+      deps,
+    );
+
+    expect(writeFile).not.toHaveBeenCalled();
   });
 });

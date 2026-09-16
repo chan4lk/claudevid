@@ -38,4 +38,6 @@ export {
   MuxDurationMismatchError,
 } from "./mux.js";
 export type { MuxOptions } from "./mux.js";
+export { decodeAudioFile, DecodeError, VOICE_TRACK_SAMPLE_RATE } from "./decode.js";
+export type { DecodeAudioOptions, DecodeAudioResult, DecodeErrorReason } from "./decode.js";
 export { exportSrt, exportVtt } from "./export.js";

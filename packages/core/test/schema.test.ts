@@ -139,4 +139,92 @@ describe("videoSpecSchema", () => {
       }
     });
   });
+
+  describe("scene.audio (013-scene-external-audio)", () => {
+    it("accepts a scene-relative audio src with pads and resolves it unchanged (AC1)", () => {
+      const audio = { src: "audio/a.wav", padStart: 0.4, padEnd: 0.6 };
+      const result = videoSpecSchema.safeParse({
+        version: 1,
+        scenes: [{ id: "a", duration: "auto", layers: [], audio }],
+      });
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.scenes[0]!.audio).toEqual(audio);
+      }
+    });
+
+    it.each(["http://x/a.wav", "pipe:0", "concat:a|b", "data:audio/wav;base64,AA==", "file:///a.wav"])(
+      "rejects a src carrying a URL scheme: %s (AC2)",
+      (src) => {
+        const result = videoSpecSchema.safeParse({
+          version: 1,
+          scenes: [{ id: "a", duration: 1, layers: [], audio: { src } }],
+        });
+        expect(result.success).toBe(false);
+        if (!result.success) {
+          const issue = result.error.issues.find((i) => i.path.join("/") === "scenes/0/audio/src");
+          expect(issue).toBeDefined();
+        }
+      }
+    );
+
+    it.each(["C:\\audio\\a.wav", "./a.wav"])(
+      "accepts a plain file path, including a Windows drive letter: %s (AC2)",
+      (src) => {
+        const result = videoSpecSchema.safeParse({
+          version: 1,
+          scenes: [{ id: "a", duration: 1, layers: [], audio: { src } }],
+        });
+        expect(result.success).toBe(true);
+      }
+    );
+
+    it("rejects a negative padStart (AC3)", () => {
+      const result = videoSpecSchema.safeParse({
+        version: 1,
+        scenes: [{ id: "a", duration: 1, layers: [], audio: { src: "a.wav", padStart: -1 } }],
+      });
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        const issue = result.error.issues.find((i) => i.path.join("/") === "scenes/0/audio/padStart");
+        expect(issue).toBeDefined();
+      }
+    });
+
+    it("rejects a scene carrying both narration and audio (AC4)", () => {
+      const result = videoSpecSchema.safeParse({
+        version: 1,
+        scenes: [
+          {
+            id: "a",
+            duration: 1,
+            layers: [],
+            narration: "hello",
+            audio: { src: "a.wav" },
+          },
+        ],
+      });
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        const issue = result.error.issues.find((i) => i.path.join("/") === "scenes/0");
+        expect(issue?.message).toBe(
+          'Scene "a" has both narration and audio — use one voice source per scene'
+        );
+      }
+    });
+
+    it("rejects a root-level audio field as an unrecognized key (AC5)", () => {
+      const result = videoSpecSchema.safeParse({
+        version: 1,
+        audio: { track: "x.wav" },
+        scenes: [{ id: "a", duration: 1, layers: [] }],
+      });
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        const issue = result.error.issues.find((i) => i.code === "unrecognized_keys");
+        expect(issue).toBeDefined();
+        expect((issue as { keys: string[] }).keys).toContain("audio");
+      }
+    });
+  });
 });

@@ -27,4 +27,21 @@ describe("generateJsonSchema (AC10)", () => {
 
     expect(validate({ version: 1 })).toBe(false);
   });
+
+  it("places scene.audio under scenes.items.properties and drops the top-level audio field (AC5)", () => {
+    const schema = generateJsonSchema() as {
+      definitions: {
+        VideoSpec: {
+          properties: {
+            audio?: unknown;
+            scenes: { items: { properties: { audio?: unknown } } };
+          };
+        };
+      };
+    };
+    const videoSpec = schema.definitions.VideoSpec;
+
+    expect(videoSpec.properties.scenes.items.properties.audio).toBeDefined();
+    expect(videoSpec.properties.audio).toBeUndefined();
+  });
 });

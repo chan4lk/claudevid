@@ -121,5 +121,8 @@ export function buildDirectorPrompt(
     "  layer with something different — restraint reads as more polished than novelty.",
     "- Match the requested prompt's scope: a short social clip should feel tight and fast; a longer",
     "  tutorial can afford more scenes and more breathing room between beats.",
+    "- Do not emit `scene.audio` unless the user has supplied audio files and told you their paths —",
+    "  a scene's voice comes from `narration` (which you write and the pipeline synthesizes) or from",
+    "  a real, user-provided `audio.src` file, never a path you invent.",
   ].join("\n");
 }

@@ -13,11 +13,22 @@ export const metaSchema = z.object({
 });
 export type Meta = z.infer<typeof metaSchema>;
 
-export const audioSchema = z.object({
-  track: z.string().optional(),
-  volume: z.number().min(0).max(1).optional(),
+// A two-or-more-character scheme prefix (`pipe:`, `concat:`, `data:`, `file:`, `http:` …) or a
+// literal "://" marks `src` as a URL rather than a plain file path (FR2). A single-letter prefix
+// (`C:\…`) is one character short of the scheme pattern, so Windows drive letters are unaffected.
+const URL_SCHEME_PATTERN = /^[A-Za-z][A-Za-z0-9+.-]+:/;
+
+export const sceneAudioSchema = z.object({
+  src: z
+    .string()
+    .min(1)
+    .refine((value) => !value.includes("://") && !URL_SCHEME_PATTERN.test(value), {
+      message: "src must be a plain file path, not a URL",
+    }),
+  padStart: z.number().min(0).optional(),
+  padEnd: z.number().min(0).optional(),
 });
-export type AudioTrack = z.infer<typeof audioSchema>;
+export type SceneAudio = z.infer<typeof sceneAudioSchema>;
 
 const sceneTransitionSchema = z.object({
   kind: z.enum(["cut", "cross-fade"]),
@@ -73,6 +84,7 @@ export const sceneSchema: z.ZodType<SceneType, z.ZodTypeDef, SceneInput> = z
     layers: z.array(z.lazy(() => layerUnion())),
     transition: sceneTransitionSchema.optional(),
     narration: narrationSchema.optional(),
+    audio: sceneAudioSchema.optional(),
   })
   .superRefine((scene, ctx) => {
     const violation = checkNestingDepth(scene.layers);
@@ -81,6 +93,14 @@ export const sceneSchema: z.ZodType<SceneType, z.ZodTypeDef, SceneInput> = z
         code: z.ZodIssueCode.custom,
         path: ["layers", ...violation.path],
         message: `Layer nesting exceeds the maximum depth of ${MAX_GROUP_NESTING_DEPTH} group levels`,
+      });
+    }
+
+    if (scene.narration && scene.audio) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [],
+        message: `Scene "${scene.id}" has both narration and audio — use one voice source per scene`,
       });
     }
   });
@@ -102,9 +122,9 @@ export const videoSpecSchema: z.ZodType<VideoSpecType, z.ZodTypeDef, VideoSpecIn
     fps: z.number().positive().default(30),
     background: z.string().optional(),
     meta: metaSchema.optional(),
-    audio: audioSchema.optional(),
     scenes: z.array(sceneSchema).min(1),
   })
+  .strict()
   .superRefine((spec, ctx) => {
     const seen = new Set<string>();
     spec.scenes.forEach((scene, i) => {

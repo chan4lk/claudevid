@@ -18,6 +18,8 @@ import {
   buildAudioGraphArgv,
   muxOutput,
   PINNED_MODEL,
+  decodeAudioFile,
+  VOICE_TRACK_SAMPLE_RATE,
   type SynthesisRequest,
   type WordTiming,
   type AudioTrack,
@@ -44,12 +46,18 @@ export interface RenderPipelineOptions {
   profileName: "preview" | "final";
   outputPath: string;
   captions?: boolean;
+  /** With `captions`, render anyway when some scenes use `scene.audio` (spec.md FR17): those
+   * scenes get no captions layer (there is no reference text to align against) and their ids are
+   * reported back in the resolved value's `skippedCaptionSceneIds`. Without this, `captions` +
+   * any `scene.audio` scene throws `CaptionsExternalAudioError`. */
+  captionsAllowPartial?: boolean;
   cpuEncode?: boolean;
   force?: boolean;
   scale?: number;
   // Injectable seams (NFR3) — all default to the real implementations when omitted.
   synthesizeFn?: typeof synthesize;
   alignFn?: typeof align;
+  decodeAudioFn?: typeof decodeAudioFile;
   probeFn?: typeof probe;
   createEncodePipeFn?: typeof createEncodePipe;
   createRendererFn?: typeof createRenderer;
@@ -57,77 +65,198 @@ export interface RenderPipelineOptions {
   buildAudioGraphArgvFn?: typeof buildAudioGraphArgv;
 }
 
-/** One synthesized narration block, plus its running start offset (seconds, block-relative to
- * its own scene) among the other blocks of the same scene. */
+/** Thrown by `runRenderPipeline` (spec.md FR17, design.md D6) when `opts.captions` is requested
+ * and at least one scene drives its voice track from `scene.audio` instead of `narration` —
+ * external audio carries no reference text to force-align, so it cannot be captioned. Thrown
+ * before Step A (before `synthesizeFn`/`decodeAudioFn` run), unless
+ * `opts.captionsAllowPartial` opts into rendering those scenes without captions. */
+export class CaptionsExternalAudioError extends Error {
+  readonly sceneIds: string[];
+
+  constructor(sceneIds: string[]) {
+    super(
+      `--captions requires reference text to align against, but scene(s) ${sceneIds
+        .map((id) => `"${id}"`)
+        .join(", ")} use scene.audio (external audio, no reference text) instead of narration. ` +
+        "Pass --captions-allow-partial to caption the narrated scenes and skip these.",
+    );
+    this.name = "CaptionsExternalAudioError";
+    this.sceneIds = sceneIds;
+  }
+}
+
+/** One block of collected voice-track audio, plus its running start offset (seconds, block-
+ * relative to its own scene) among the other blocks of the same scene. `source` distinguishes a
+ * synthesized narration block from a decoded `scene.audio` block (design.md D1's `SynthesizedBlock`
+ * — the same shape for both, so everything downstream of Step A stays unchanged, spec.md FR13). */
 interface SynthesizedBlock {
   text: string;
   audio: Buffer;
   sampleRate: number;
   durationSeconds: number;
   offsetSeconds: number;
+  source: "narration" | "audio";
 }
 
 /**
- * Step A — synthesizes every narration block up front, regardless of a scene's duration mode
- * (spec.md FR9). Every "auto"-duration scene needs its blocks' measured durations to compute a
- * timeline (Step B/C) and every narrated scene needs the raw audio again for the voice-track WAV
- * (Step D) and, if `opts.captions`, forced alignment (Step E) — so synthesis always happens
- * first, unconditionally.
+ * Step A — collects every scene's voice-track audio up front, regardless of a scene's duration
+ * mode (spec.md FR9, extended by FR13 for `scene.audio`). Every "auto"-duration scene needs its
+ * blocks' measured durations to compute a timeline (Step B/C) and every voiced scene needs the
+ * raw audio again for the voice-track WAV (Step D) and, if `opts.captions`, forced alignment
+ * (Step E) — so collection always happens first, unconditionally.
  *
- * Design choice (documented per this task's brief): this calls `synthesizeFn` directly, NOT
+ * A scene's voice comes from exactly one of `narration` or `audio` (schema.ts's `narration` xor
+ * `audio` refinement): narration is synthesized as before; `scene.audio` is decoded via
+ * `decodeAudioFn` into the same `SynthesizedBlock` shape, tagged `source` so downstream steps
+ * (captions, Step D) can tell them apart (design.md D1). Every block's `sampleRate` is checked
+ * against `VOICE_TRACK_SAMPLE_RATE` as soon as it's known (spec.md FR13) — before any timeline is
+ * compiled or frame rendered.
+ *
+ * Design choice (documented per this task's brief): narration calls `synthesizeFn` directly, NOT
  * `getOrSynthesize`. `getOrSynthesize`'s on-disk cache entry (`cache.ts`'s `CacheEntryFile`)
  * stores only `{ durationSeconds, audioBase64 }` — it discards `sampleRate` entirely. Step D
  * needs `{ audio, sampleRate }` together (one real sample rate for the whole assembled voice
  * track), so a cache hit would still require a second real synthesis call just to recover
  * `sampleRate`, at which point the cache adds no value at this call site. Calling `synthesizeFn`
  * directly is simpler and avoids that redundant round-trip; it does mean this pipeline does not
- * benefit from `cache.ts`'s content-addressed cache the way `computeAudioDurations` does.
+ * benefit from `cache.ts`'s content-addressed cache the way `computeAudioDurations` does. Decoded
+ * `scene.audio` blocks are likewise never written to or read from that cache (spec.md FR16): it's
+ * keyed on narration text and exists because synthesis is slow, but decoding a local file isn't.
  */
-async function synthesizeNarration(
+async function collectSceneAudio(
   spec: VideoSpec,
   synthesizeFn: typeof synthesize,
+  decodeAudioFn: typeof decodeAudioFile,
 ): Promise<Map<string, SynthesizedBlock[]>> {
   const bySceneId = new Map<string, SynthesizedBlock[]>();
 
   for (const scene of spec.scenes) {
-    if (!scene.narration || scene.narration.length === 0) continue;
-
-    const blocks: SynthesizedBlock[] = [];
-    let cumulativeSeconds = 0;
-    for (const block of scene.narration as NarrationBlock[]) {
-      const request: SynthesisRequest = {
-        text: block.text,
-        voice: block.voice ?? "af_heart",
-        speed: block.speed ?? 1,
-        modelId: PINNED_MODEL.id,
-        modelDigest: PINNED_MODEL.digest,
-        lexiconDigest: "", // lexicon application is out of scope for this pipeline (spec.md FR9)
-      };
-      const { audio, sampleRate } = await synthesizeFn(request);
-      const durationSeconds = audio.length / 2 / sampleRate;
-      blocks.push({ text: block.text, audio, sampleRate, durationSeconds, offsetSeconds: cumulativeSeconds });
-      cumulativeSeconds += durationSeconds;
+    if (scene.narration && scene.narration.length > 0) {
+      const blocks: SynthesizedBlock[] = [];
+      let cumulativeSeconds = 0;
+      for (const block of scene.narration as NarrationBlock[]) {
+        const request: SynthesisRequest = {
+          text: block.text,
+          voice: block.voice ?? "af_heart",
+          speed: block.speed ?? 1,
+          modelId: PINNED_MODEL.id,
+          modelDigest: PINNED_MODEL.digest,
+          lexiconDigest: "", // lexicon application is out of scope for this pipeline (spec.md FR9)
+        };
+        const { audio, sampleRate } = await synthesizeFn(request);
+        checkVoiceTrackSampleRate(scene.id, sampleRate);
+        const durationSeconds = audio.length / 2 / sampleRate;
+        blocks.push({
+          text: block.text,
+          audio,
+          sampleRate,
+          durationSeconds,
+          offsetSeconds: cumulativeSeconds,
+          source: "narration",
+        });
+        cumulativeSeconds += durationSeconds;
+      }
+      bySceneId.set(scene.id, blocks);
+    } else if (scene.audio) {
+      const { audio, sampleRate, durationSeconds } = await decodeAudioFn(scene.audio.src);
+      checkVoiceTrackSampleRate(scene.id, sampleRate);
+      bySceneId.set(scene.id, [
+        {
+          text: "",
+          audio,
+          sampleRate,
+          durationSeconds,
+          offsetSeconds: scene.audio.padStart ?? 0,
+          source: "audio",
+        },
+      ]);
     }
-    bySceneId.set(scene.id, blocks);
   }
 
   return bySceneId;
 }
 
-/** Step B — sums each `"auto"`-duration scene's synthesized blocks into the `audioDurations`
- * record `compileTimeline` consults (spec.md FR9). Scenes with a fixed numeric duration are
- * omitted, matching `compileTimeline`'s own contract (only `"auto"` scenes consult this record). */
+/** spec.md FR13: every collected block — synthesized or decoded — must agree with the voice
+ * track's one true sample rate. Resampling is out of scope, so a mismatch fails closed here, in
+ * Step A, before any timeline is compiled or frame rendered. */
+function checkVoiceTrackSampleRate(sceneId: string, sampleRate: number): void {
+  if (sampleRate !== VOICE_TRACK_SAMPLE_RATE) {
+    throw new Error(
+      `Scene "${sceneId}" produced audio at ${sampleRate}Hz, but the voice track requires ` +
+        `${VOICE_TRACK_SAMPLE_RATE}Hz. Resampling is out of scope — every scene's audio must match.`,
+    );
+  }
+}
+
+/** Step B — sums each `"auto"`-duration scene's collected blocks into the `audioDurations` record
+ * `compileTimeline` consults (spec.md FR9, extended by FR14). An `audio` scene's entry also
+ * includes its `padStart`/`padEnd` silence — placement of the decoded block within that widened
+ * window is `assembleVoiceTrack`'s job (unchanged); the pads just make the window itself longer.
+ * Scenes with a fixed numeric duration are omitted, matching `compileTimeline`'s own contract
+ * (only `"auto"` scenes consult this record). */
 function computeAudioDurationsRecord(
   spec: VideoSpec,
-  narrationBySceneId: Map<string, SynthesizedBlock[]>,
+  sceneAudioBySceneId: Map<string, SynthesizedBlock[]>,
 ): Record<string, number> {
   const record: Record<string, number> = {};
   for (const scene of spec.scenes) {
     if (scene.duration !== "auto") continue;
-    const blocks = narrationBySceneId.get(scene.id) ?? [];
-    record[scene.id] = blocks.reduce((sum, block) => sum + block.durationSeconds, 0);
+    const blocks = sceneAudioBySceneId.get(scene.id) ?? [];
+    const decodedSeconds = blocks.reduce((sum, block) => sum + block.durationSeconds, 0);
+    record[scene.id] = scene.audio
+      ? (scene.audio.padStart ?? 0) + decodedSeconds + (scene.audio.padEnd ?? 0)
+      : decodedSeconds;
   }
   return record;
+}
+
+/** Advisory diagnostics for `scene.audio` (spec.md FR15) — never fatal, reported the same way as
+ * the motion/code diagnostics below. (a) A cross-fade transition into the scene after an `audio`
+ * scene that runs longer than that scene's `padEnd` silence starts the next scene's voice before
+ * this scene's own speech has finished. (b) An `audio` scene with a fixed numeric `duration`
+ * shorter than `padStart + decoded + padEnd` will have its audio truncated at the scene end by
+ * `assembleVoiceTrack`'s existing same-scene clamp. */
+function computeAudioAdvisoryDiagnostics(
+  spec: VideoSpec,
+  sceneAudioBySceneId: Map<string, SynthesizedBlock[]>,
+): Diagnostic[] {
+  const diagnostics: Diagnostic[] = [];
+
+  spec.scenes.forEach((scene, index) => {
+    if (!scene.audio) return;
+
+    const padStart = scene.audio.padStart ?? 0;
+    const padEnd = scene.audio.padEnd ?? 0;
+    const decodedSeconds = (sceneAudioBySceneId.get(scene.id) ?? []).reduce(
+      (sum, block) => sum + block.durationSeconds,
+      0,
+    );
+
+    const nextScene = spec.scenes[index + 1];
+    if (nextScene?.transition?.kind === "cross-fade") {
+      const crossFadeDuration = nextScene.transition.duration ?? 0;
+      if (crossFadeDuration > padEnd) {
+        diagnostics.push({
+          path: `/scenes/${index}/audio`,
+          message:
+            `Scene "${scene.id}"'s cross-fade into "${nextScene.id}" is ${crossFadeDuration}s, longer ` +
+            `than this scene's padEnd (${padEnd}s) — the next scene's voice will start over this ` +
+            "scene's speech.",
+        });
+      }
+    }
+
+    if (typeof scene.duration === "number" && scene.duration < padStart + decodedSeconds + padEnd) {
+      diagnostics.push({
+        path: `/scenes/${index}/audio`,
+        message:
+          `Scene "${scene.id}"'s audio (padStart ${padStart}s + ${decodedSeconds}s + padEnd ${padEnd}s) ` +
+          `exceeds its fixed duration (${scene.duration}s) and will be truncated at the scene end.`,
+      });
+    }
+  });
+
+  return diagnostics;
 }
 
 function findSceneWindow(timeline: Timeline, sceneId: string): SceneWindow {
@@ -141,17 +270,30 @@ function findSceneWindow(timeline: Timeline, sceneId: string): SceneWindow {
  * `alignFn` against each block's already-synthesized audio. Converts block-relative
  * `WordTiming[]` to timeline-absolute seconds (`SceneWindow.startFrame / fps` + the block's own
  * cumulative offset within its scene). Never mutates the caller's original `spec` — only the
- * touched scenes get new `layers` arrays; untouched scenes are shared by reference. */
+ * touched scenes get new `layers` arrays; untouched scenes are shared by reference.
+ *
+ * A scene whose blocks are `source: "audio"` (spec.md FR17, design.md D6) has no reference text
+ * to align against, so it is skipped — the full scene list and its indices are otherwise
+ * untouched — and its id is collected into the returned `skippedCaptionSceneIds`. (Only reached
+ * for such a scene at all when `opts.captionsAllowPartial` let `runRenderPipeline` get this far;
+ * the gate itself lives there.) */
 async function insertCaptionsLayers(
   spec: VideoSpec,
   timeline: Timeline,
-  narrationBySceneId: Map<string, SynthesizedBlock[]>,
+  sceneAudioBySceneId: Map<string, SynthesizedBlock[]>,
   alignFn: typeof align,
-): Promise<VideoSpec> {
+): Promise<{ spec: VideoSpec; skippedCaptionSceneIds: string[] }> {
+  const skippedCaptionSceneIds: string[] = [];
+
   const scenes = await Promise.all(
     spec.scenes.map(async (scene) => {
-      const blocks = narrationBySceneId.get(scene.id);
+      const blocks = sceneAudioBySceneId.get(scene.id);
       if (!blocks || blocks.length === 0) return scene;
+
+      if (blocks[0]!.source === "audio") {
+        skippedCaptionSceneIds.push(scene.id);
+        return scene;
+      }
 
       const sceneWindow = findSceneWindow(timeline, scene.id);
       const sceneStartSeconds = sceneWindow.startFrame / spec.fps;
@@ -170,7 +312,7 @@ async function insertCaptionsLayers(
     }),
   );
 
-  return { ...spec, scenes };
+  return { spec: { ...spec, scenes }, skippedCaptionSceneIds };
 }
 
 /** Builds a minimal 44-byte canonical PCM WAV header (mono, 16-bit) for `pcm`. */
@@ -325,32 +467,52 @@ function reportDiagnostics(label: string, diagnostics: Diagnostic[]): void {
   }
 }
 
-/** Shared render pipeline (spec.md FR9, design.md D1/D2): synthesizes narration, compiles the
- * timeline, optionally inserts forced-aligned captions layers, renders every frame through the
- * encoder, and (if any scene has narration) muxes the assembled voice track against the silent
- * video into `opts.outputPath`. Always disposes the renderer and cleans up the temp run,
- * including on error (mirrors `tools/bench/src/bench.ts`'s try/finally shape). */
-export async function runRenderPipeline(spec: VideoSpec, opts: RenderPipelineOptions): Promise<void> {
+/** Shared render pipeline (spec.md FR9, design.md D1/D2): collects each scene's voice-track audio
+ * (synthesized narration or decoded `scene.audio`), compiles the timeline, optionally inserts
+ * forced-aligned captions layers, renders every frame through the encoder, and (if any scene has
+ * voice audio) muxes the assembled voice track against the silent video into `opts.outputPath`.
+ * Always disposes the renderer and cleans up the temp run, including on error (mirrors
+ * `tools/bench/src/bench.ts`'s try/finally shape). Resolves to `{ skippedCaptionSceneIds }`:
+ * empty unless `opts.captionsAllowPartial` caused some `scene.audio` scenes to render without
+ * captions (spec.md FR17). */
+export async function runRenderPipeline(
+  spec: VideoSpec,
+  opts: RenderPipelineOptions,
+): Promise<{ skippedCaptionSceneIds: string[] }> {
   const synthesizeFn = opts.synthesizeFn ?? synthesize;
   const alignFn = opts.alignFn ?? align;
+  const decodeAudioFn = opts.decodeAudioFn ?? decodeAudioFile;
   const probeFn = opts.probeFn ?? probe;
   const createEncodePipeFn = opts.createEncodePipeFn ?? createEncodePipe;
   const createRendererFn = opts.createRendererFn ?? createRenderer;
   const muxOutputFn = opts.muxOutputFn ?? muxOutput;
   const buildAudioGraphArgvFn = opts.buildAudioGraphArgvFn ?? buildAudioGraphArgv;
 
+  // Captions gate (spec.md FR17, design.md D6) — checked before Step A so a caption request that
+  // can't be honored fails before any synthesis/decode work happens.
+  const audioSceneIds = spec.scenes.filter((scene) => scene.audio).map((scene) => scene.id);
+  if (opts.captions && audioSceneIds.length > 0 && !opts.captionsAllowPartial) {
+    throw new CaptionsExternalAudioError(audioSceneIds);
+  }
+
   // Step A
-  const narrationBySceneId = await synthesizeNarration(spec, synthesizeFn);
-  const hasNarration = narrationBySceneId.size > 0;
+  const sceneAudioBySceneId = await collectSceneAudio(spec, synthesizeFn, decodeAudioFn);
+  const hasVoice = sceneAudioBySceneId.size > 0;
 
   // Step B + C
-  const audioDurations = computeAudioDurationsRecord(spec, narrationBySceneId);
+  const audioDurations = computeAudioDurationsRecord(spec, sceneAudioBySceneId);
   let renderSpec = spec;
   let timeline = compileTimeline(spec, { audioDurations });
 
-  // Step E (only if captions requested and something is actually narrated)
-  if (opts.captions && hasNarration) {
-    renderSpec = await insertCaptionsLayers(spec, timeline, narrationBySceneId, alignFn);
+  // Advisory diagnostics (spec.md FR15) — never fatal, reported the same way as motion/code below.
+  reportDiagnostics("audio:", computeAudioAdvisoryDiagnostics(spec, sceneAudioBySceneId));
+
+  // Step E (only if captions requested and something is actually voiced)
+  let skippedCaptionSceneIds: string[] = [];
+  if (opts.captions && hasVoice) {
+    const inserted = await insertCaptionsLayers(spec, timeline, sceneAudioBySceneId, alignFn);
+    renderSpec = inserted.spec;
+    skippedCaptionSceneIds = inserted.skippedCaptionSceneIds;
     timeline = compileTimeline(renderSpec, { audioDurations });
   }
 
@@ -369,9 +531,9 @@ export async function runRenderPipeline(spec: VideoSpec, opts: RenderPipelineOpt
 
   try {
     // Step D (needs tempRun.dir, so it happens inside this try so a failure still cleans up)
-    const voiceTrackPath = hasNarration ? await assembleVoiceTrack(spec, timeline, narrationBySceneId, tempRun.dir) : undefined;
+    const voiceTrackPath = hasVoice ? await assembleVoiceTrack(spec, timeline, sceneAudioBySceneId, tempRun.dir) : undefined;
 
-    const silentVideoPath = hasNarration ? path.join(tempRun.dir, "silent-video.mp4") : opts.outputPath;
+    const silentVideoPath = hasVoice ? path.join(tempRun.dir, "silent-video.mp4") : opts.outputPath;
 
     const pipe = createEncodePipeFn({
       profileName: opts.profileName,
@@ -393,9 +555,9 @@ export async function runRenderPipeline(spec: VideoSpec, opts: RenderPipelineOpt
     }
     await pipe.finish();
 
-    // Step G — mux (only if narration exists anywhere; otherwise the silent video written above
+    // Step G — mux (only if voice audio exists anywhere; otherwise the silent video written above
     // *is* opts.outputPath already, nothing further to do).
-    if (hasNarration && voiceTrackPath) {
+    if (hasVoice && voiceTrackPath) {
       const track: AudioTrack = { filePath: voiceTrackPath, role: "voice" };
       const argv = buildAudioGraphArgvFn({ tracks: [track], outputDurationSeconds: timeline.frameCount / spec.fps });
       await muxOutputFn({ silentVideoPath, audioGraphArgv: argv, outputPath: opts.outputPath, force: opts.force });
@@ -404,4 +566,6 @@ export async function runRenderPipeline(spec: VideoSpec, opts: RenderPipelineOpt
     renderer.dispose();
     await tempRun.cleanup();
   }
+
+  return { skippedCaptionSceneIds };
 }
